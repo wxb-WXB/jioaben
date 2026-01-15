@@ -2,6 +2,9 @@ import json
 import os
 import requests
 from requests_toolbelt.multipart.encoder import MultipartEncoder
+import logging
+
+log = logging.getLogger("LingyanAi")
 
 
 class LingyanAi:
@@ -112,17 +115,23 @@ class LingyanDataset:
 
     def list_datasets(self, workspace_id: str, folder_id: str | None = None):
         url = "http://10.4.49.66:18080/api/v1/service/datasets"
-        query = {"workspace_id": workspace_id, "folder_id": folder_id, "page_size": 200}
-
-        response = requests.get(
-            url,
-            params=query,
-            headers={"accept": "application/json", "X-API-Key": self.api_key},
-        )
-
-        if response.status_code != 200:
-            return response.status_code, response.json().get("msg")
-        return 200, response.json().get("data")
+        datasets = []
+        current_page = 1
+        while True:
+            response = requests.get(
+                url,
+                params={"workspace_id": workspace_id, "folder_id": folder_id, "page_size": 1000, "page": current_page},
+                headers={"accept": "application/json", "X-API-Key": self.api_key},
+            )
+            if response.status_code != 200:
+                return response.status_code, response.json().get("msg")
+            data = response.json().get("data")
+            if not data or len(data) == 0:
+                break
+            datasets.extend(data)
+            current_page += 1
+            log.info(f"获取知识库列表成功，长度 {len(data)}，当前页码 {current_page}")
+        return 200, datasets
 
     def create_dataset(
         self, workspace_id: str, name: str, folder_id: str, description: str = ""
@@ -162,7 +171,7 @@ class LingyanDataset:
                                 "top_p": 0.75,
                                 "frequency_penalty": 0.5,
                                 "presence_penalty": 0.5,
-                                "max_tokens": 512,
+                                "max_tokens": 2000,
                             },
                         },
                         "summary": {
@@ -175,7 +184,7 @@ class LingyanDataset:
                                 "top_p": 0.75,
                                 "frequency_penalty": 0.5,
                                 "presence_penalty": 0.5,
-                                "max_tokens": 512,
+                                "max_tokens": 2000,
                             },
                         },
                         "question": {
@@ -188,7 +197,7 @@ class LingyanDataset:
                                 "top_p": 0.75,
                                 "frequency_penalty": 0.5,
                                 "presence_penalty": 0.5,
-                                "max_tokens": 512,
+                                "max_tokens": 2000,
                             },
                         },
                     },
@@ -205,7 +214,7 @@ class LingyanDataset:
                             "top_p": 0.75,
                             "frequency_penalty": 0.5,
                             "presence_penalty": 0.5,
-                            "max_tokens": 512,
+                            "max_tokens": 2000,
                         },
                     },
                 },
@@ -319,7 +328,7 @@ class LingyanDataset:
                             "top_p": 0.75,
                             "frequency_penalty": 0.5,
                             "presence_penalty": 0.5,
-                            "max_tokens": 512,
+                            "max_tokens": 2000,
                         },
                     },
                     "summary": {
@@ -332,7 +341,7 @@ class LingyanDataset:
                             "top_p": 0.75,
                             "frequency_penalty": 0.5,
                             "presence_penalty": 0.5,
-                            "max_tokens": 512,
+                            "max_tokens": 2000,
                         },
                     },
                     "question": {
@@ -345,7 +354,7 @@ class LingyanDataset:
                             "top_p": 0.75,
                             "frequency_penalty": 0.5,
                             "presence_penalty": 0.5,
-                            "max_tokens": 512,
+                            "max_tokens": 2000,
                         },
                     },
                 },
@@ -354,7 +363,7 @@ class LingyanDataset:
                 "doc_summary": True,
                 "doc_summary_config": {
                     "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-                    "name": "qwen-turbo",
+                    "name": "deepseekv3-0324",
                     "mode": "chat",
                     "size": 32768,
                     "completion_params": {
@@ -362,7 +371,7 @@ class LingyanDataset:
                         "top_p": 0.75,
                         "frequency_penalty": 0.5,
                         "presence_penalty": 0.5,
-                        "max_tokens": 512,
+                        "max_tokens": 2000,
                     },
                 },
             },
@@ -434,9 +443,21 @@ class LingyanDataset:
             data (list): 数据
         """
         url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset_id}/documents"
-        response = requests.get(
-            url,
-            headers={"accept": "application/json", "X-API-Key": self.api_key},
-            params={"page_size": 2000},
-        )
-        return response.status_code, response.json().get("data")
+        documents = []
+        current_page = 1
+        while True:
+            response = requests.get(
+                url,
+                headers={"accept": "application/json", "X-API-Key": self.api_key},
+                params={"page_size": 1000, "page": current_page},
+            )
+
+            if response.status_code != 200:
+                return response.status_code, response.json().get("msg")
+            data = response.json().get("data").get("list")
+            if not data or len(data) == 0:
+                break
+            documents.extend(data)
+            current_page += 1
+            log.info(f"获取文档列表成功，长度 {len(data)}，当前页码 {current_page}")
+        return 200, documents

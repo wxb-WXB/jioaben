@@ -1,6 +1,8 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import datetime
 import logging
 import os
+import time
 import requests
 
 from LingyanAi import LingyanDataset
@@ -43,22 +45,35 @@ if response_code != 200:
     log.error(f"获取知识库列表失败: {response_code}, {datasets}")
     exit()
 
+def restart_task(dataset_id, document_id):
+    while 1:
+        try:
+            response_code, response = lingyanDataset.create_task(dataset_id, document_id)
+        except Exception as e:
+            log.error(f"创建任务失败: {e}")
+            time.sleep(1)
+            continue
+        break
+    if response_code != 200:
+        log.error(f"创建任务失败: {response_code}, {response}")
+        return False
+    log.info(f"创建任务成功: {response}")
+
+
 for dataset in datasets:
-    log.info(f"处理知识库: {dataset.get("name")}")
-    # 查看文档
-    url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset.get("id")}/documents"
+    dataset_id = dataset.get("id")
+    log.info(f"处理知识库: {dataset.get('name')}")
+    url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset_id}/documents"
+    query = {"page_size": 20000}
+    while 1:
+        try:
+            response = requests.get(url, headers=headers, params=query)
+            break
+        except Exception as e:
+            log.error(f"获取文档列表失败: {e}")
+            time.sleep(1)
+    documents = response.json().get("data") or []
 
-    query = {
-        "page_size": 2000
-    }
-
-    response = requests.get(url, headers=headers)
-    for data in response.json().get("data"):
-        document_id = data.get("id")
-        if data.get("segment_count") == 0:
-            # 如果没有切片,创建任务
-            response_code, response = lingyanDataset.create_task(dataset.get("id"), document_id)
-            if response_code != 200:
-                log.error(f"创建任务失败: {response_code}, {response}")
-                continue
-            log.info(f"创建任务成功: {response}")
+    with ThreadPoolExecutor(max_workers=24) as executor:
+        for document in documents:
+            executor.submit(restart_task, dataset_id, document.get("id"))
