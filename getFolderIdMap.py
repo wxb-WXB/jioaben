@@ -4,7 +4,7 @@ from models import db, FolderMap
 
 # 获取目录id和目录名的映射
 
-workspace_id = "faa3722a-398e-4f1a-aad8-7aecfff4f369"
+workspace_id = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"
 
 url = "http://10.4.49.66:18080/api/v1/console/datasets/folders/tree"
 

@@ -454,10 +454,145 @@ class LingyanDataset:
 
             if response.status_code != 200:
                 return response.status_code, response.json().get("msg")
-            data = response.json().get("data").get("list")
+            
+            response_data = response.json().get("data")
+            # 兼容两种返回格式：data 是列表或 data.list 是列表
+            if isinstance(response_data, list):
+                data = response_data
+            elif isinstance(response_data, dict):
+                data = response_data.get("list", [])
+            else:
+                data = []
+            
             if not data or len(data) == 0:
                 break
             documents.extend(data)
             current_page += 1
             log.info(f"获取文档列表成功，长度 {len(data)}，当前页码 {current_page}")
         return 200, documents
+
+    def delete_document(self, dataset_id: str, document_id: str, max_retries: int = 3):
+        """
+        删除文档
+        ----
+        Args:
+            dataset_id (str): 知识库ID
+            document_id (str): 文档ID
+            max_retries (int): 最大重试次数，默认3次
+        Returns:
+            status_code (int): 状态码
+            data (dict): 响应数据
+        """
+        import time
+        
+        url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset_id}/documents/{document_id}"
+        
+        for attempt in range(max_retries):
+            try:
+                response = requests.delete(
+                    url,
+                    headers={"accept": "application/json", "X-API-Key": self.api_key},
+                    timeout=60  # 60秒超时
+                )
+                if response.status_code != 200:
+                    return response.status_code, response.json().get("msg")
+                return 200, response.json().get("data")
+            except requests.exceptions.RequestException as e:
+                log.warning(f"删除文档请求失败 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
+                if attempt < max_retries - 1:
+                    time.sleep(2)  # 等待2秒后重试
+                else:
+                    return 500, f"请求失败: {str(e)}"
+
+    def delete_documents_by_types(self, dataset_id: str, file_types: list[str] = None):
+        """
+        删除知识库中指定类型的文档
+        ----
+        Args:
+            dataset_id (str): 知识库ID
+            file_types (list[str]): 要删除的文件类型列表，默认为 ["png", "zip", "jpg", "jpeg"]
+                                    注意：类型不带点，如 "png" 而不是 ".png"
+        Returns:
+            status_code (int): 状态码
+            deleted_count (int): 删除的文档数量
+            failed_list (list): 删除失败的文档列表
+        """
+        if file_types is None:
+            file_types = ["png", "zip", "jpg", "jpeg"]
+        
+        # 统一转为小写，去掉可能的点
+        file_types = [t.lower().lstrip(".") for t in file_types]
+        
+        # 获取文档列表
+        status_code, documents = self.list_documents(dataset_id)
+        if status_code != 200:
+            return status_code, 0, []
+
+        deleted_count = 0
+        failed_list = []
+
+        for doc in documents:
+            doc_name = doc.get("name", "")
+            doc_type = doc.get("type", "").lower()
+            # 检查文档类型是否在要删除的类型列表中
+            if doc_type in file_types:
+                doc_id = doc.get("id")
+                log.info(f"正在删除文档: {doc_name} (类型: {doc_type}, ID: {doc_id})")
+                del_status, del_result = self.delete_document(dataset_id, doc_id)
+                if del_status == 200:
+                    deleted_count += 1
+                    log.info(f"成功删除文档: {doc_name}")
+                else:
+                    failed_list.append({"name": doc_name, "id": doc_id, "type": doc_type, "error": del_result})
+                    log.error(f"删除文档失败: {doc_name}, 错误: {del_result}")
+
+        return 200, deleted_count, failed_list
+
+    def delete_documents_global(self, workspace_id: str, file_types: list[str] = None, folder_id: str = None):
+        """
+        全局删除所有知识库中指定类型的文档
+        ----
+        Args:
+            workspace_id (str): 工作空间ID
+            file_types (list[str]): 要删除的文件类型列表，默认为 ["png", "zip", "jpg", "jpeg"]
+            folder_id (str): 文件夹ID，可选
+        Returns:
+            total_deleted (int): 总共删除的文档数量
+            total_failed (list): 所有删除失败的文档列表
+            dataset_results (list): 每个知识库的删除结果
+        """
+        if file_types is None:
+            file_types = ["png", "zip", "jpg", "jpeg"]
+
+        # 获取所有知识库
+        status_code, datasets = self.list_datasets(workspace_id, folder_id)
+        if status_code != 200:
+            log.error(f"获取知识库列表失败: {datasets}")
+            return 0, [], []
+
+        total_deleted = 0
+        total_failed = []
+        dataset_results = []
+
+        log.info(f"开始全局删除，共找到 {len(datasets)} 个知识库，要删除的文件类型: {file_types}")
+
+        for dataset in datasets:
+            dataset_id = dataset.get("id")
+            dataset_name = dataset.get("name")
+            log.info(f"正在处理知识库: {dataset_name} (ID: {dataset_id})")
+
+            status, deleted_count, failed_list = self.delete_documents_by_types(dataset_id, file_types)
+            
+            if deleted_count > 0 or len(failed_list) > 0:
+                dataset_results.append({
+                    "dataset_id": dataset_id,
+                    "dataset_name": dataset_name,
+                    "deleted_count": deleted_count,
+                    "failed_count": len(failed_list),
+                })
+                total_deleted += deleted_count
+                total_failed.extend([{**f, "dataset_name": dataset_name} for f in failed_list])
+                log.info(f"知识库 {dataset_name}: 删除 {deleted_count} 个文档，失败 {len(failed_list)} 个")
+
+        log.info(f"全局删除完成，总共删除 {total_deleted} 个文档，失败 {len(total_failed)} 个")
+        return total_deleted, total_failed, dataset_results

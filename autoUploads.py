@@ -37,7 +37,7 @@ log = logging.getLogger("autoUploads")
 
 # TODO: 修改这里的配置
 base_folder = r'D:\02-飞速资料\07-环北项目\01-环北工程知识库'
-workspace_id = "faa3722a-398e-4f1a-aad8-7aecfff4f369"       # 工作区id
+workspace_id = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"       # 工作区id
 api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"       # 灵燕平台 api key
 log.info(f"开始扫描目录：{base_folder}，准备上传文件到灵燕AI知识库")
 
