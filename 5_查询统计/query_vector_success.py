@@ -12,6 +12,15 @@
 - cancelled: 已取消
 """
 import json
+import sys
+import os
+
+# 添加项目根目录和核心模块目录到 Python 路径
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, "1_核心模块"))
+
 from LingyanAi import LingyanDataset
 from models import FolderMap
 
