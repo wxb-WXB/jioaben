@@ -29,7 +29,7 @@ workspace_ids = [("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "工作空间1"),]
 BATCH_SIZE = 50
 
 # 每批处理完后等待的时间（秒）
-WAIT_TIME = 600
+WAIT_TIME = 700
 
 dataset_api = LingyanDataset(api_key)
 

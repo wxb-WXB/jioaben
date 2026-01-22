@@ -6,14 +6,20 @@
 """
 import sys
 import time
+import os
 import requests
 import logging
 from datetime import datetime
 
 # 设置控制台编码
 if sys.platform == 'win32':
-    import os
     os.system('chcp 65001 >nul 2>&1')
+
+# 添加项目根目录和核心模块目录到 Python 路径
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, "1_核心模块"))
 
 from LingyanAi import LingyanDataset
 from models import FolderMap
@@ -22,7 +28,7 @@ from models import FolderMap
 
 # API 配置
 API_KEY = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3Njk2Njg3NTd9.QIA7366n3_hYMv0R9rtVIg_pudMvdIGuDGrw-8clAtE"
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3Njk2ODk5ODd9.xknU8Zl4Sl9w8sC5_n5LqZK9-2djdDr7AzZAfDm13qk"
 
 # 工作空间配置
 WORKSPACE_ID = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"

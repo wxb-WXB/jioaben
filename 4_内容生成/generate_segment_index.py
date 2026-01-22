@@ -7,14 +7,20 @@
 """
 import sys
 import time
+import os
 import requests
 import logging
 from datetime import datetime
 
 # 设置控制台编码
 if sys.platform == 'win32':
-    import os
     os.system('chcp 65001 >nul 2>&1')
+
+# 添加项目根目录和核心模块目录到 Python 路径
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, "1_核心模块"))
 
 from LingyanAi import LingyanDataset
 from models import FolderMap
