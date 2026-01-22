@@ -2,18 +2,25 @@
 FAQ问答生成脚本
 - 扫描知识库中向量化成功的文档
 - 检查文档是否已有FAQ任务
-- 没有则启动FAQ任务，等待完成后再启动下一个
+- 滑动窗口模式：始终保持N个任务在运行，完成一个立即补充一个
 """
 import sys
 import time
 import requests
 import logging
 from datetime import datetime
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 # 设置控制台编码
 if sys.platform == 'win32':
     import os
     os.system('chcp 65001 >nul 2>&1')
+
+# 添加项目根目录和核心模块目录到 Python 路径
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, "1_核心模块"))
 
 from LingyanAi import LingyanDataset
 from models import FolderMap
@@ -29,9 +36,10 @@ WORKSPACE_ID = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"
 WORKSPACE_NAME = "环北工程知识库"
 
 # 处理配置
+CONCURRENT_TASKS = 10     # 同时运行的任务数量（滑动窗口大小）
 CHECK_INTERVAL = 5        # 检查任务状态的间隔（秒）
 MAX_WAIT_TIME = 600       # 单个任务最大等待时间（秒），超时则跳过
-REQUEST_INTERVAL = 2      # 每个请求之间的间隔（秒）
+REQUEST_INTERVAL = 0.5    # 启动任务时每个请求之间的间隔（秒）
 MAX_RETRIES = 3           # 单个文档最大重试次数
 RETRY_INTERVAL = 5        # 重试间隔（秒）
 
@@ -231,39 +239,130 @@ def wait_for_faq_completion(dataset_id, document_id, document_name):
             time.sleep(CHECK_INTERVAL)
 
 
-def process_document(dataset_id, document_id, document_name, idx, total):
+def start_single_task(dataset_id, doc_info):
     """
-    处理单个文档：启动FAQ任务并等待完成
+    启动单个文档的FAQ任务（不等待完成）
     返回: (success: bool, message: str)
     """
-    log.info(f"  [{idx}/{total}] 文档: {document_name}")
-    log.info(f"    文档ID: {document_id}")
+    document_id = doc_info['document_id']
     
     # 启动FAQ任务
     for attempt in range(1, MAX_RETRIES + 1):
-        log.info(f"    启动FAQ任务...")
         success, message = start_faq_task(dataset_id, document_id)
         
         if success:
-            log.info(f"    [已启动] {message}")
-            break
+            return True, message
         else:
-            log.warning(f"    [启动失败] 第{attempt}次: {message}")
             if attempt < MAX_RETRIES:
                 time.sleep(RETRY_INTERVAL)
             else:
                 return False, f"启动失败: {message}"
     
-    # 等待任务完成
-    log.info(f"    等待FAQ生成完成...")
-    success, message = wait_for_faq_completion(dataset_id, document_id, document_name)
+    return False, "启动失败"
+
+
+def process_sliding_window(dataset_id, docs_to_process):
+    """
+    滑动窗口模式处理文档：
+    - 始终保持 CONCURRENT_TASKS 个任务在运行
+    - 完成一个立即补充一个新的
+    返回: (success_count: int, fail_count: int)
+    """
+    total_docs = len(docs_to_process)
+    if total_docs == 0:
+        return 0, 0
     
-    if success:
-        log.info(f"    [成功] {message}")
-    else:
-        log.warning(f"    [失败] {message}")
+    # 运行中的任务: {document_id: {'doc': doc_info, 'start_time': time}}
+    running_tasks = {}
+    # 待处理的文档队列
+    pending_docs = list(docs_to_process)
     
-    return success, message
+    success_count = 0
+    fail_count = 0
+    processed_count = 0
+    
+    log.info(f"  滑动窗口模式: 同时运行 {CONCURRENT_TASKS} 个任务")
+    log.info(f"  总共需要处理: {total_docs} 个文档")
+    log.info("-" * 50)
+    
+    while pending_docs or running_tasks:
+        # 1. 补充任务：如果运行中的任务少于 CONCURRENT_TASKS，且还有待处理的文档
+        while len(running_tasks) < CONCURRENT_TASKS and pending_docs:
+            doc_info = pending_docs.pop(0)
+            document_id = doc_info['document_id']
+            document_name = doc_info['document_name']
+            
+            success, message = start_single_task(dataset_id, doc_info)
+            
+            if success:
+                running_tasks[document_id] = {
+                    'doc': doc_info,
+                    'start_time': time.time()
+                }
+                processed_count += 1
+                log.info(f"    [{processed_count}/{total_docs}] 已启动: {document_name[:50]}...")
+            else:
+                fail_count += 1
+                processed_count += 1
+                log.warning(f"    [{processed_count}/{total_docs}] 启动失败: {document_name[:50]}...")
+            
+            time.sleep(REQUEST_INTERVAL)
+        
+        if not running_tasks:
+            break
+        
+        # 2. 检查运行中任务的状态
+        completed_ids = []
+        timeout_ids = []
+        
+        for doc_id, task_info in running_tasks.items():
+            doc = task_info['doc']
+            start_time = task_info['start_time']
+            elapsed = time.time() - start_time
+            
+            # 检查超时
+            if elapsed > MAX_WAIT_TIME:
+                timeout_ids.append(doc_id)
+                log.warning(f"      ⏱ 超时: {doc['document_name'][:50]}... ({int(elapsed)}秒)")
+                continue
+            
+            # 获取文档状态
+            success, doc_info = get_document_info(dataset_id, doc_id)
+            if not success:
+                continue
+            
+            has_faq, faq_status = get_faq_task_status(doc_info)
+            if not has_faq:
+                continue
+            
+            if faq_status in ["completed", "success"]:
+                completed_ids.append((doc_id, True))
+                log.info(f"      ✓ 完成: {doc['document_name'][:50]}... ({int(elapsed)}秒)")
+            elif faq_status in ["failed", "error"]:
+                completed_ids.append((doc_id, False))
+                log.warning(f"      ✗ 失败: {doc['document_name'][:50]}...")
+        
+        # 3. 处理已完成的任务
+        for doc_id, is_success in completed_ids:
+            del running_tasks[doc_id]
+            if is_success:
+                success_count += 1
+            else:
+                fail_count += 1
+        
+        # 4. 处理超时的任务
+        for doc_id in timeout_ids:
+            del running_tasks[doc_id]
+            fail_count += 1
+        
+        # 5. 如果还有运行中的任务，等待一段时间再检查
+        if running_tasks:
+            remaining = len(pending_docs)
+            running = len(running_tasks)
+            log.info(f"      运行中: {running}, 待处理: {remaining}, 成功: {success_count}, 失败: {fail_count}")
+            time.sleep(CHECK_INTERVAL)
+    
+    return success_count, fail_count
 
 
 def scan_and_process(workspace_id, workspace_name):
@@ -341,26 +440,12 @@ def scan_and_process(workspace_id, workspace_name):
                 continue
             
             log.info(f"  需要启动FAQ: {len(docs_to_process)} 个")
-            log.info("-" * 50)
             
-            # 逐个处理文档
-            for idx, doc_info in enumerate(docs_to_process, 1):
-                success, message = process_document(
-                    dataset_id,
-                    doc_info['document_id'],
-                    doc_info['document_name'],
-                    idx,
-                    len(docs_to_process)
-                )
-                
-                if success:
-                    total_success += 1
-                else:
-                    total_fail += 1
-                
-                # 间隔
-                if idx < len(docs_to_process):
-                    time.sleep(REQUEST_INTERVAL)
+            # 滑动窗口模式处理
+            success_count, fail_count = process_sliding_window(dataset_id, docs_to_process)
+            
+            total_success += success_count
+            total_fail += fail_count
             
             log.info("-" * 50)
             log.info(f"  知识库 [{dataset_name}] 处理完成")
@@ -379,7 +464,7 @@ def main():
     
     log.info("=" * 60)
     log.info("FAQ问答生成任务工具")
-    log.info(f"模式: 逐个处理（启动一个 → 等待完成 → 再启动下一个）")
+    log.info(f"模式: 滑动窗口（始终保持 {CONCURRENT_TASKS} 个任务运行，完成一个补充一个）")
     log.info(f"检查间隔: {CHECK_INTERVAL} 秒")
     log.info(f"单任务最大等待: {MAX_WAIT_TIME} 秒")
     log.info(f"失败重试次数: {MAX_RETRIES}")

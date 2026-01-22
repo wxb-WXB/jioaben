@@ -220,25 +220,29 @@ if dataset_error_count:
 # ============================================================
 # 最终汇总统计 (放在最后方便查看)
 # ============================================================
-ws1_success = sum(1 for doc in success_docs if doc["workspace"] == "工作空间1")
-ws2_success = sum(1 for doc in success_docs if doc["workspace"] == "工作空间2")
-ws1_indexing = sum(1 for doc in indexing_docs if doc["workspace"] == "工作空间1")
-ws2_indexing = sum(1 for doc in indexing_docs if doc["workspace"] == "工作空间2")
-ws1_error = sum(1 for doc in error_docs if doc["workspace"] == "工作空间1")
-ws2_error = sum(1 for doc in error_docs if doc["workspace"] == "工作空间2")
+# 使用与 workspace_ids 中定义一致的名称
+ws1_name = "环北知识库"
+ws2_name = "第二个知识库"
+
+ws1_success = sum(1 for doc in success_docs if doc["workspace"] == ws1_name)
+ws2_success = sum(1 for doc in success_docs if doc["workspace"] == ws2_name)
+ws1_indexing = sum(1 for doc in indexing_docs if doc["workspace"] == ws1_name)
+ws2_indexing = sum(1 for doc in indexing_docs if doc["workspace"] == ws2_name)
+ws1_error = sum(1 for doc in error_docs if doc["workspace"] == ws1_name)
+ws2_error = sum(1 for doc in error_docs if doc["workspace"] == ws2_name)
 
 total_success = ws1_success + ws2_success
 total_indexing = ws1_indexing + ws2_indexing
 total_error = ws1_error + ws2_error
 
 print(f"\n{'='*60}")
-print(f"📊 最终汇总统计")
+print(f"最终汇总统计")
 print(f"{'='*60}")
-print(f"┌──────────────────────────────────────────────────────────────┐")
-print(f"│  工作空间                                  成功    进行中    失败  │")
-print(f"├──────────────────────────────────────────────────────────────┤")
-print(f"│  工作空间1 (9c6857a6...)                  {ws1_success:>5}    {ws1_indexing:>5}    {ws1_error:>5}  │")
-print(f"│  工作空间2 (2f6118d7...)                  {ws2_success:>5}    {ws2_indexing:>5}    {ws2_error:>5}  │")
-print(f"├──────────────────────────────────────────────────────────────┤")
-print(f"│  【总计】                                 {total_success:>5}    {total_indexing:>5}    {total_error:>5}  │")
-print(f"└──────────────────────────────────────────────────────────────┘")
+print(f"")
+print(f"  工作空间                      成功      进行中      失败")
+print(f"  {'-'*55}")
+print(f"  {ws1_name}                  {ws1_success:>8}    {ws1_indexing:>8}    {ws1_error:>8}")
+print(f"  {ws2_name}              {ws2_success:>8}    {ws2_indexing:>8}    {ws2_error:>8}")
+print(f"  {'-'*55}")
+print(f"  【总计】                    {total_success:>8}    {total_indexing:>8}    {total_error:>8}")
+print(f"")

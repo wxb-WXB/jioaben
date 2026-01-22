@@ -5,11 +5,17 @@
 """
 import sys
 import time
+import os
 
 # 设置控制台编码
 if sys.platform == 'win32':
-    import os
     os.system('chcp 65001 >nul 2>&1')
+
+# 添加项目根目录和核心模块目录到 Python 路径
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, "1_核心模块"))
 
 from LingyanAi import LingyanDataset
 from models import FolderMap
@@ -20,7 +26,7 @@ api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
 workspace_ids = [("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "工作空间1"),]
 
 # 每批处理的文档数量
-BATCH_SIZE = 20
+BATCH_SIZE = 50
 
 # 每批处理完后等待的时间（秒）
 WAIT_TIME = 600
