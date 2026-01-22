@@ -33,7 +33,7 @@ api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"    # 灵燕平台 API Ke
 
 # 要删除的文件类型列表（注意：不带点，如 "png" 而不是 ".png"）
 # 这里的类型对应文档的 type 字段，如 pdf, docx, png, jpg, zip 等
-file_types_to_delete = ["png", "zip", "jpg", "jpeg"]
+file_types_to_delete = ["png", "zip", "jpg", "jpeg","mp4"]
 # ====================================================
 
 if __name__ == "__main__":

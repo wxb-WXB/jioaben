@@ -16,13 +16,28 @@ from LingyanAi import LingyanDataset
 from models import FolderMap
 
 api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
-workspace_id = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"
+
+# 两个 workspace ID
+workspace_ids = [
+    ("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "工作空间1"),
+    ("2f6118d7-20c5-48fd-8c44-b34bfab1ac30", "工作空间2"),
+]
 
 dataset = LingyanDataset(api_key)
 
-# 获取知识库列表
-status, datasets = dataset.list_datasets(workspace_id)
-print(f"获取到 {len(datasets)} 个知识库")
+# 获取所有工作空间的知识库列表
+all_datasets = []
+for ws_id, ws_name in workspace_ids:
+    status, datasets_list = dataset.list_datasets(ws_id)
+    print(f"[{ws_name}] 获取到 {len(datasets_list)} 个知识库")
+    # 给每个 dataset 添加 workspace 信息
+    for ds in datasets_list:
+        ds["_workspace_id"] = ws_id
+        ds["_workspace_name"] = ws_name
+    all_datasets.extend(datasets_list)
+
+print(f"\n总共获取到 {len(all_datasets)} 个知识库")
+datasets = all_datasets
 
 def get_folder_path(folder_id):
     """根据 folder_id 获取文件夹路径"""
@@ -80,8 +95,9 @@ for i, ds in enumerate(datasets):
     dataset_name = ds.get("name")
     folder_id = ds.get("folder_id")
     folder_path = get_folder_path(folder_id)
+    ws_name = ds.get("_workspace_name", "未知")
     
-    print(f"[{i+1}/{len(datasets)}] 正在处理知识库: {dataset_name}", end="")
+    print(f"[{i+1}/{len(datasets)}] [{ws_name}] 正在处理知识库: {dataset_name}", end="")
     
     try:
         status, documents = dataset.list_documents(dataset_id)
@@ -108,27 +124,27 @@ for i, ds in enumerate(datasets):
             # success 和 completed 都表示成功
             if doc_status in ["completed", "success"]:
                 ds_success += 1
-                success_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path})
+                success_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name})
             elif doc_status in ["indexing", "parsing", "waiting", "queuing"]:
                 ds_indexing += 1
-                indexing_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "status": doc_status, "folder_path": folder_path})
+                indexing_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "status": doc_status, "folder_path": folder_path, "workspace": ws_name})
             elif doc_status in ["error", "failed"]:
                 ds_error += 1
-                error_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path})
+                error_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name})
             elif doc_status == "cancelled":
-                cancelled_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path})
+                cancelled_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name})
             elif doc_status == "no_task":
-                no_task_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path})
+                no_task_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name})
         
         result_parts = []
         if ds_success > 0:
-            dataset_success_count[dataset_name] = {"count": ds_success, "folder_path": folder_path}
+            dataset_success_count[dataset_name] = {"count": ds_success, "folder_path": folder_path, "workspace": ws_name}
             result_parts.append(f"✓成功:{ds_success}")
         if ds_indexing > 0:
-            dataset_indexing_count[dataset_name] = {"count": ds_indexing, "folder_path": folder_path}
+            dataset_indexing_count[dataset_name] = {"count": ds_indexing, "folder_path": folder_path, "workspace": ws_name}
             result_parts.append(f"⏳进行中:{ds_indexing}")
         if ds_error > 0:
-            dataset_error_count[dataset_name] = {"count": ds_error, "folder_path": folder_path}
+            dataset_error_count[dataset_name] = {"count": ds_error, "folder_path": folder_path, "workspace": ws_name}
             result_parts.append(f"✗失败:{ds_error}")
         
         if result_parts:
@@ -160,7 +176,7 @@ if dataset_success_count:
     print(f"向量化成功的知识库列表 (共 {len(dataset_success_count)} 个):")
     print(f"{'='*60}")
     for name, info in sorted(dataset_success_count.items(), key=lambda x: -x[1]["count"]):
-        print(f"  路径: {info['folder_path']}")
+        print(f"  [{info['workspace']}] 路径: {info['folder_path']}")
         print(f"  知识库: {name}")
         print(f"  成功文档数: {info['count']} 个")
         print()
@@ -170,7 +186,7 @@ if dataset_indexing_count:
     print(f"正在向量化的知识库列表 (共 {len(dataset_indexing_count)} 个):")
     print(f"{'='*60}")
     for name, info in sorted(dataset_indexing_count.items(), key=lambda x: -x[1]["count"]):
-        print(f"  路径: {info['folder_path']}")
+        print(f"  [{info['workspace']}] 路径: {info['folder_path']}")
         print(f"  知识库: {name}")
         print(f"  进行中文档数: {info['count']} 个")
         print()
@@ -178,7 +194,7 @@ if dataset_indexing_count:
     # 列出正在向量化的文档详情
     print(f"\n正在向量化的文档详情:")
     for doc in indexing_docs[:50]:  # 最多显示50个
-        print(f"  [{doc['folder_path']}] [{doc['dataset_name']}] {doc['doc_name']} ({doc['status']})")
+        print(f"  [{doc['workspace']}] [{doc['folder_path']}] [{doc['dataset_name']}] {doc['doc_name']} ({doc['status']})")
     if len(indexing_docs) > 50:
         print(f"  ... 还有 {len(indexing_docs) - 50} 个文档")
 
@@ -187,7 +203,33 @@ if dataset_error_count:
     print(f"向量化失败的知识库列表 (共 {len(dataset_error_count)} 个):")
     print(f"{'='*60}")
     for name, info in sorted(dataset_error_count.items(), key=lambda x: -x[1]["count"]):
-        print(f"  路径: {info['folder_path']}")
+        print(f"  [{info['workspace']}] 路径: {info['folder_path']}")
         print(f"  知识库: {name}")
         print(f"  失败文档数: {info['count']} 个")
         print()
+
+# ============================================================
+# 最终汇总统计 (放在最后方便查看)
+# ============================================================
+ws1_success = sum(1 for doc in success_docs if doc["workspace"] == "工作空间1")
+ws2_success = sum(1 for doc in success_docs if doc["workspace"] == "工作空间2")
+ws1_indexing = sum(1 for doc in indexing_docs if doc["workspace"] == "工作空间1")
+ws2_indexing = sum(1 for doc in indexing_docs if doc["workspace"] == "工作空间2")
+ws1_error = sum(1 for doc in error_docs if doc["workspace"] == "工作空间1")
+ws2_error = sum(1 for doc in error_docs if doc["workspace"] == "工作空间2")
+
+total_success = ws1_success + ws2_success
+total_indexing = ws1_indexing + ws2_indexing
+total_error = ws1_error + ws2_error
+
+print(f"\n{'='*60}")
+print(f"📊 最终汇总统计")
+print(f"{'='*60}")
+print(f"┌──────────────────────────────────────────────────────────────┐")
+print(f"│  工作空间                                  成功    进行中    失败  │")
+print(f"├──────────────────────────────────────────────────────────────┤")
+print(f"│  工作空间1 (9c6857a6...)                  {ws1_success:>5}    {ws1_indexing:>5}    {ws1_error:>5}  │")
+print(f"│  工作空间2 (2f6118d7...)                  {ws2_success:>5}    {ws2_indexing:>5}    {ws2_error:>5}  │")
+print(f"├──────────────────────────────────────────────────────────────┤")
+print(f"│  【总计】                                 {total_success:>5}    {total_indexing:>5}    {total_error:>5}  │")
+print(f"└──────────────────────────────────────────────────────────────┘")
