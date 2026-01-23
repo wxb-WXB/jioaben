@@ -28,7 +28,7 @@ from models import FolderMap
 
 # API 配置
 API_KEY = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3Njk2ODk5ODd9.xknU8Zl4Sl9w8sC5_n5LqZK9-2djdDr7AzZAfDm13qk"
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3Njk2OTM3NjF9.YVv4zegwo9ZSxTtGIb1ttzCwK8kjEzaXSUGbmPy2ZOo"
 
 # 工作空间配置
 WORKSPACE_ID = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"
@@ -50,7 +50,7 @@ LLM_CONFIG = {
 # 处理配置
 REQUEST_INTERVAL = 3  # 每个请求成功后等待的时间（秒）
 MAX_RETRIES = 3       # 单个文档最大重试次数
-RETRY_INTERVAL = 10   # 重试间隔（秒）
+RETRY_INTERVAL = 2   # 重试间隔（秒）
 
 # ============== 配置结束 ==============
 
@@ -164,7 +164,12 @@ def generate_summary(dataset_id, document_id, document_name):
             else:
                 return False, f"API返回错误: code={result.get('code')}, msg={result.get('msg')}", ""
         else:
-            return False, f"HTTP状态码: {response.status_code}", ""
+            # 尝试获取错误详情
+            try:
+                error_detail = response.json()
+                return False, f"HTTP {response.status_code}: {error_detail}", ""
+            except:
+                return False, f"HTTP {response.status_code}: {response.text[:200]}", ""
             
     except requests.exceptions.Timeout:
         return False, "请求超时", ""

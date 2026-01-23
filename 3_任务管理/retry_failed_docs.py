@@ -26,10 +26,10 @@ api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
 workspace_ids = [("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "工作空间1"),]
 
 # 每批处理的文档数量
-BATCH_SIZE = 50
+BATCH_SIZE = 20
 
 # 每批处理完后等待的时间（秒）
-WAIT_TIME = 700
+WAIT_TIME = 300
 
 dataset_api = LingyanDataset(api_key)
 
