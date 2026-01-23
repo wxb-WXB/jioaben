@@ -1,6 +1,11 @@
 from datetime import datetime
 import logging
 import os
+import sys
+
+# 添加核心模块路径到系统路径
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "1_核心模块"))
+
 from LingyanAi import LingyanDataset
 
 # 确保logs文件夹存在
