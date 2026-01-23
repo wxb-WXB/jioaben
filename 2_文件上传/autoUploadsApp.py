@@ -101,16 +101,11 @@ def process_file(file_path):
     with stats_lock:
         stats['total_files'] += 1
 
-    # 检查是否为Excel文件，如果是则跳过上传
+    # 只允许上传PDF和Word文件
     file_ext = os.path.splitext(file_path)[1].lower()
-    excel_extensions = ['.xls', '.xlsx', '.xlsm', '.xlsb', '.xlt', '.xltx', '.xltm']
-    if file_ext in excel_extensions:
-        thread_log.warning(f"检测到Excel文件，跳过上传：{file_path}")
-        with stats_lock:
-            stats['skip_count'] += 1
-        return
-    elif file_ext in ['.rar', '.zip']:
-        thread_log.warning(f"检测到压缩文件，跳过上传：{file_path}")
+    allowed_extensions = ['.pdf', '.doc', '.docx']
+    if file_ext not in allowed_extensions:
+        thread_log.warning(f"非PDF/Word文件，跳过上传：{file_path}（仅支持 {', '.join(allowed_extensions)}）")
         with stats_lock:
             stats['skip_count'] += 1
         return
