@@ -14,7 +14,7 @@ sys.path.insert(0, os.path.join(project_root, '1_核心模块'))
 from LingyanAi import LingyanDataset, LingyanFile
 from models import FolderMap
 from utils import get_file_relative_dir, is_pdf_file, list_files, pdf_has_images
-from failed_records import FailedRecord, FailedRecordsManager
+from failed_records import FailedRecord, FailedRecordsManager, SuccessRecordsManager
 
 # from pyfiglet import figlet_format
 # print(figlet_format("Auto Upload", font="slant"))
@@ -80,6 +80,9 @@ dataset_cache_lock = Lock()
 # 初始化失败记录管理器
 failed_manager = FailedRecordsManager()
 
+# 初始化成功记录管理器（用于跳过已上传的文件）
+success_manager = SuccessRecordsManager()
+
 # 扫描所有配置的目录，收集文件路径和对应的base_folder
 # all_files_info: [(file_path, base_folder), ...]
 all_files_info = []
@@ -132,6 +135,14 @@ def process_file(file_info):
 
     with stats_lock:
         stats['total_files'] += 1
+
+    # 检查是否已成功上传过（本地记录，无需API调用）
+    full_file_path = os.path.join(base_folder, file_path)
+    if success_manager.is_uploaded(full_file_path):
+        thread_log.info(f"已上传过（本地记录），跳过：{file_path}")
+        with stats_lock:
+            stats['skip_count'] += 1
+        return
 
     # 检查是否为Excel文件，如果是则跳过上传
     file_ext = os.path.splitext(file_path)[1].lower()
@@ -276,6 +287,13 @@ def process_file(file_info):
         return
     if duplicate_count > 0:
         thread_log.warning(f"检测到重名文件，跳过文件上传：{file_path}，重复数量：{duplicate_count}")
+        # 重名说明已上传过，记录到成功记录（下次直接跳过，不用调API）
+        success_manager.add_record(
+            file_path=full_file_path,
+            file_name=file_name,
+            dataset_id=dataset_id,
+            document_id="",  # 重名跳过的没有document_id
+        )
         with stats_lock:
             stats['skip_count'] += 1
         return
@@ -380,6 +398,14 @@ def process_file(file_info):
     # 成功后移除失败记录（如果之前有记录的话）
     failed_manager.remove_record(file_path)
     
+    # 记录成功上传（用于下次跳过）
+    success_manager.add_record(
+        file_path=full_file_path,
+        file_name=file_name,
+        dataset_id=dataset_id,
+        document_id=newDocId,
+    )
+    
     with stats_lock:
         stats['success_count'] += 1
     thread_log.info(f"文件处理完成：{file_path}")
@@ -426,16 +452,21 @@ def process_file_safe(file_info):
 
 # 使用线程池并发处理文件
 log.info(f"开始使用线程池并发处理文件，线程数：{MAX_WORKERS}")
+log.info(f"已加载 {success_manager.get_count()} 条成功记录，将跳过已上传的文件")
 with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
     # 使用map方法提交所有任务并等待完成
     list(executor.map(process_file_safe, all_files_info))
+
+# 强制保存成功记录（确保所有记录都已写入文件）
+success_manager.flush()
 
 # 输出统计信息
 log.info(f"文件处理完成！统计信息：")
 log.info(f"总文件数：{stats['total_files']}")
 log.info(f"成功处理：{stats['success_count']}")
-log.info(f"跳过文件：{stats['skip_count']}")
+log.info(f"跳过文件：{stats['skip_count']}（含已上传 + Excel/压缩包 + 重名文件）")
 log.info(f"失败文件：{stats['error_count']}")
+log.info(f"累计成功上传记录：{success_manager.get_count()} 条")
 
 # 输出失败记录摘要
 if stats['error_count'] > 0:

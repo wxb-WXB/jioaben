@@ -373,3 +373,217 @@ class FailedRecordsManager:
             }.get(stage, stage)
             print(f"  - {stage_desc}: {count}")
         print(f"{'='*60}\n")
+
+
+class SuccessRecord:
+    """
+    单条成功记录
+    
+    Attributes:
+        file_path (str): 文件完整路径
+        file_name (str): 文件名
+        dataset_id (str): 知识库ID
+        document_id (str): 文档ID
+        uploaded_at (str): 上传时间
+    """
+    
+    def __init__(
+        self,
+        file_path: str,
+        file_name: str = "",
+        dataset_id: str = "",
+        document_id: str = "",
+        uploaded_at: str = None,
+    ):
+        self.file_path = file_path
+        self.file_name = file_name or os.path.basename(file_path)
+        self.dataset_id = dataset_id
+        self.document_id = document_id
+        self.uploaded_at = uploaded_at or datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    
+    def to_dict(self) -> dict:
+        """转换为字典"""
+        return {
+            "file_path": self.file_path,
+            "file_name": self.file_name,
+            "dataset_id": self.dataset_id,
+            "document_id": self.document_id,
+            "uploaded_at": self.uploaded_at,
+        }
+    
+    @classmethod
+    def from_dict(cls, data: dict) -> "SuccessRecord":
+        """从字典创建实例"""
+        return cls(
+            file_path=data.get("file_path", ""),
+            file_name=data.get("file_name", ""),
+            dataset_id=data.get("dataset_id", ""),
+            document_id=data.get("document_id", ""),
+            uploaded_at=data.get("uploaded_at"),
+        )
+
+
+class SuccessRecordsManager:
+    """
+    成功记录管理器
+    
+    用于记录已成功上传的文件，避免重复上传。
+    使用单个 JSON 文件持久化存储（不按日期分割，因为需要跨天查询）。
+    
+    Attributes:
+        records_dir (str): 记录存储目录
+        records (set): 成功上传的文件路径集合（用于快速查询）
+        records_detail (dict): 详细记录字典，key 为文件路径
+    """
+    
+    def __init__(self, records_dir: str = None):
+        """
+        初始化管理器
+        
+        Args:
+            records_dir (str): 记录存储目录，默认为项目根目录/success_records/
+        """
+        if records_dir is None:
+            script_dir = os.path.dirname(os.path.abspath(__file__))
+            project_root = os.path.dirname(script_dir)
+            records_dir = os.path.join(project_root, "success_records")
+        
+        self.records_dir = records_dir
+        self.records: set[str] = set()  # 快速查询用
+        self.records_detail: dict[str, SuccessRecord] = {}  # 详细信息
+        self._lock = Lock()
+        self._save_counter = 0  # 批量保存计数器
+        self._save_batch_size = 10  # 每10条记录保存一次
+        
+        # 确保目录存在
+        if not os.path.exists(self.records_dir):
+            os.makedirs(self.records_dir)
+        
+        # 加载已有记录
+        self._load_records()
+    
+    def _get_records_file(self) -> str:
+        """获取记录文件路径"""
+        return os.path.join(self.records_dir, "success_records.json")
+    
+    def _load_records(self):
+        """加载成功记录"""
+        file_path = self._get_records_file()
+        if os.path.exists(file_path):
+            try:
+                with open(file_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                    for record_data in data.get("records", []):
+                        record = SuccessRecord.from_dict(record_data)
+                        self.records.add(record.file_path)
+                        self.records_detail[record.file_path] = record
+                log.info(f"加载成功记录：{len(self.records)} 条")
+            except Exception as e:
+                log.error(f"加载成功记录出错：{e}")
+    
+    def _save_records(self, force: bool = False):
+        """
+        保存记录到文件
+        
+        Args:
+            force (bool): 是否强制保存（忽略批量计数）
+        """
+        # 批量保存逻辑：每N条记录保存一次，减少IO
+        if not force:
+            self._save_counter += 1
+            if self._save_counter < self._save_batch_size:
+                return
+            self._save_counter = 0
+        
+        file_path = self._get_records_file()
+        try:
+            data = {
+                "updated_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "total_count": len(self.records),
+                "records": [r.to_dict() for r in self.records_detail.values()],
+            }
+            with open(file_path, "w", encoding="utf-8") as f:
+                json.dump(data, f, ensure_ascii=False, indent=2)
+        except Exception as e:
+            log.error(f"保存成功记录出错：{e}")
+    
+    def is_uploaded(self, file_path: str) -> bool:
+        """
+        检查文件是否已上传
+        
+        Args:
+            file_path (str): 文件路径
+            
+        Returns:
+            bool: 是否已上传
+        """
+        return file_path in self.records
+    
+    def add_record(
+        self,
+        file_path: str,
+        file_name: str = "",
+        dataset_id: str = "",
+        document_id: str = "",
+    ) -> SuccessRecord:
+        """
+        添加成功记录
+        
+        Args:
+            file_path (str): 文件完整路径
+            file_name (str): 文件名
+            dataset_id (str): 知识库ID
+            document_id (str): 文档ID
+            
+        Returns:
+            SuccessRecord: 创建的成功记录
+        """
+        with self._lock:
+            record = SuccessRecord(
+                file_path=file_path,
+                file_name=file_name,
+                dataset_id=dataset_id,
+                document_id=document_id,
+            )
+            self.records.add(file_path)
+            self.records_detail[file_path] = record
+            self._save_records()
+            return record
+    
+    def remove_record(self, file_path: str) -> bool:
+        """
+        移除成功记录（如需重新上传时调用）
+        
+        Args:
+            file_path (str): 文件路径
+            
+        Returns:
+            bool: 是否成功移除
+        """
+        with self._lock:
+            if file_path in self.records:
+                self.records.discard(file_path)
+                del self.records_detail[file_path]
+                self._save_records(force=True)
+                return True
+            return False
+    
+    def get_record(self, file_path: str) -> Optional[SuccessRecord]:
+        """获取指定文件的成功记录"""
+        return self.records_detail.get(file_path)
+    
+    def get_count(self) -> int:
+        """获取成功记录总数"""
+        return len(self.records)
+    
+    def clear_records(self):
+        """清空所有记录"""
+        with self._lock:
+            self.records.clear()
+            self.records_detail.clear()
+            self._save_records(force=True)
+    
+    def flush(self):
+        """强制保存所有记录到文件"""
+        with self._lock:
+            self._save_records(force=True)
