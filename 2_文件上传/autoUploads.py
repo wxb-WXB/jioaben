@@ -1,16 +1,25 @@
 import os
+import sys
 from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock, current_thread
+import logging
+
+# 获取脚本所在目录和项目根目录
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+
+# 添加核心模块到路径
+sys.path.insert(0, os.path.join(project_root, '1_核心模块'))
 from LingyanAi import LingyanDataset, LingyanFile
 from models import FolderMap
 from utils import get_file_relative_dir, is_pdf_file, list_files, pdf_has_images
-import logging
+
 # from pyfiglet import figlet_format
 # print(figlet_format("Auto Upload", font="slant"))
 
-# 确保logs文件夹存在
-logs_dir = "logs"
+# 确保logs文件夹存在（使用项目根目录）
+logs_dir = os.path.join(project_root, "logs")
 if not os.path.exists(logs_dir):
     os.makedirs(logs_dir)
 
@@ -36,7 +45,7 @@ logging.basicConfig(
 log = logging.getLogger("autoUploads")
 
 # TODO: 修改这里的配置
-base_folder = r'D:\02-飞速资料\07-环北项目\01-环北工程知识库'
+base_folder = r'C:\Users\flydiy\Desktop\r'
 workspace_id = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"       # 工作区id
 api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"       # 灵燕平台 api key
 log.info(f"开始扫描目录：{base_folder}，准备上传文件到灵燕AI知识库")
