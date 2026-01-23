@@ -22,8 +22,13 @@ from models import FolderMap
 
 api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
 
-# 两个 workspace ID
-workspace_ids = [("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "工作空间1"),]
+# workspace ID 配置 (workspace_id, workspace_name)
+workspace_ids = [
+    ("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "科技数智部知识库"),
+]
+
+# 只处理指定目录下的知识库（为空则处理所有目录）
+TARGET_FOLDER_PATH = "01设计管理"  # 设置为 None 或 "" 则处理所有目录
 
 # 每批处理的文档数量
 BATCH_SIZE = 20
@@ -69,7 +74,7 @@ def get_doc_status(doc):
         return latest_task.get("status", "unknown"), latest_task.get("type")
 
 
-def retry_single_doc(doc, batch_num, batch_pos):
+def retry_single_doc(doc, batch_num, batch_pos, workspace_id):
     """重试单个文档"""
     print(f"\n[批次{batch_num}][{batch_pos}/{BATCH_SIZE}] 重试文档: {doc['document_name']}")
     print(f"  目录路径: {doc['folder_path']}")
@@ -80,10 +85,11 @@ def retry_single_doc(doc, batch_num, batch_pos):
         status, result = dataset_api.create_task(
             dataset_id=doc['dataset_id'],
             document_id=doc['document_id'],
-            split_mode="semantic",
+            split_mode="common",
             task_type="normal",
             image_task=False,
-            parse_enhance=True
+            parse_enhance=True,
+            workspace_id=workspace_id
         )
         
         if status == 200:
@@ -123,11 +129,15 @@ def scan_and_retry(workspace_id, workspace_name):
         folder_id = ds.get("folder_id")
         folder_path = get_folder_path(folder_id)
         
+        # 如果设置了目录过滤，则跳过不匹配的目录
+        if TARGET_FOLDER_PATH and TARGET_FOLDER_PATH not in folder_path:
+            continue
+        
         print(f"\n[{i+1}/{len(datasets)}] 检查知识库: {dataset_name}")
         print(f"  目录路径: {folder_path}")
         
         try:
-            status, documents = dataset_api.list_documents(dataset_id)
+            status, documents = dataset_api.list_documents(dataset_id, workspace_id)
             if status != 200:
                 print(f"  获取文档失败")
                 continue
@@ -137,7 +147,8 @@ def scan_and_retry(workspace_id, workspace_name):
             for doc in documents:
                 doc_status, _ = get_doc_status(doc)
                 
-                if doc_status in ["error", "failed"]:
+                # 检测失败、错误、或者没有任务的文档
+                if doc_status in ["error", "failed", "no_task"]:
                     failed_in_ds.append({
                         "dataset_id": dataset_id,
                         "dataset_name": dataset_name,
@@ -148,10 +159,10 @@ def scan_and_retry(workspace_id, workspace_name):
                     })
             
             if len(failed_in_ds) == 0:
-                print(f"  无失败文档，继续扫描...")
+                print(f"  无需处理的文档，继续扫描...")
                 continue
             
-            print(f"  发现 {len(failed_in_ds)} 个失败文档，开始处理...")
+            print(f"  发现 {len(failed_in_ds)} 个待处理文档（失败/无任务），开始处理...")
             print(f"{'='*60}")
             
             # 立即处理这些失败文档
@@ -160,7 +171,7 @@ def scan_and_retry(workspace_id, workspace_name):
                 batch_pos = len(current_batch)
                 
                 # 处理文档
-                if retry_single_doc(doc, batch_num, batch_pos):
+                if retry_single_doc(doc, batch_num, batch_pos, workspace_id):
                     total_success += 1
                 else:
                     total_fail += 1
@@ -187,8 +198,10 @@ def scan_and_retry(workspace_id, workspace_name):
 
 def main():
     print("="*60)
-    print("失败文档重试工具（边扫描边处理）")
+    print("失败/无任务文档重试工具（边扫描边处理）")
     print(f"每批处理 {BATCH_SIZE} 个文档，每批间隔 {WAIT_TIME} 秒")
+    if TARGET_FOLDER_PATH:
+        print(f"目标目录过滤: {TARGET_FOLDER_PATH}")
     print("="*60)
     
     total_success = 0

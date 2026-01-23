@@ -136,110 +136,121 @@ class LingyanDataset:
     def create_dataset(
         self, workspace_id: str, name: str, folder_id: str, description: str = ""
     ):
-        # url = "http://10.4.49.66:18080/api/v1/service/datasets"
+        url = "http://10.4.49.66:18080/api/v1/service/datasets"
 
-        # response = requests.post(
-        #     url,
-        #     json={
-        #         "workspace_id": workspace_id,
-        #         "name": name,
-        #         "description": description,
-        #         "folder_id": folder_id,
-        #         "embedding_model": {
-        #             "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-        #             "name": "Qwen3-Embedding-4B",
-        #             "size": 4096,
-        #         },
-        #         "processing_config": {
-        #             "chunk_size": 2000,
-        #             "overlap": 50,
-        #             "chinese_title_enhance": False,
-        #             "process_type": "NORMAL",
-        #             "separators": "\\n",
-        #             "replace_spaces_tabs": False,
-        #             "delete_url_email": False,
-        #             "parse_enhance": True,
-        #             "parse_toc": False,
-        #             "index_config": {
-        #                 "title": {
-        #                     "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-        #                     "name": "deepseekv3-0324",
-        #                     "mode": "chat",
-        #                     "size": 8000,
-        #                     "completion_params": {
-        #                         "temperature": 0.2,
-        #                         "top_p": 0.75,
-        #                         "frequency_penalty": 0.5,
-        #                         "presence_penalty": 0.5,
-        #                         "max_tokens": 2000,
-        #                     },
-        #                 },
-        #                 "summary": {
-        #                     "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-        #                     "name": "deepseekv3-0324",
-        #                     "mode": "chat",
-        #                     "size": 8000,
-        #                     "completion_params": {
-        #                         "temperature": 0.2,
-        #                         "top_p": 0.75,
-        #                         "frequency_penalty": 0.5,
-        #                         "presence_penalty": 0.5,
-        #                         "max_tokens": 2000,
-        #                     },
-        #                 },
-        #                 "question": {
-        #                     "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-        #                     "name": "deepseekv3-0324",
-        #                     "mode": "chat",
-        #                     "size": 8000,
-        #                     "completion_params": {
-        #                         "temperature": 0.2,
-        #                         "top_p": 0.75,
-        #                         "frequency_penalty": 0.5,
-        #                         "presence_penalty": 0.5,
-        #                         "max_tokens": 2000,
-        #                     },
-        #                 },
-        #             },
-        #             "md_split_by_headers": False,
-        #             "md_max_header_level": 3,
-        #             "doc_summary": True,
-        #             "doc_summary_config": {
-        #                 "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-        #                 "name": "deepseekv3-0324",
-        #                 "mode": "chat",
-        #                 "size": 32768,
-        #                 "completion_params": {
-        #                     "temperature": 0.2,
-        #                     "top_p": 0.75,
-        #                     "frequency_penalty": 0.5,
-        #                     "presence_penalty": 0.5,
-        #                     "max_tokens": 2000,
-        #                 },
-        #             },
-        #         },
-        #     },
-        #     headers={
-        #         "accept": "application/json",
-        #         "X-API-Key": self.api_key,
-        #         "Content-Type": "application/json",
-        #     },
-        # )
+        response = requests.post(
+            url,
+            json={
+                "workspace_id": workspace_id,
+                "name": name,
+                "description": description,
+                "folder_id": folder_id,
+                "embedding_model": {
+                    "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                    "name": "Qwen3-Embedding-4B",
+                    "size": 4096,
+                },
+                "processing_config": {
+                    "chunk_size": 2000,
+                    "overlap": 50,
+                    "chinese_title_enhance": False,
+                    "process_type": "NORMAL",
+                    "separators": "\\n",
+                    "replace_spaces_tabs": False,
+                    "delete_url_email": False,
+                    "parse_enhance": True,
+                    "parse_toc": False,
+                    "index_config": {
+                        "title": {
+                            "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                            "name": "deepseekv3-0324",
+                            "mode": "chat",
+                            "size": 8000,
+                            "completion_params": {
+                                "temperature": 0.2,
+                                "top_p": 0.75,
+                                "frequency_penalty": 0.5,
+                                "presence_penalty": 0.5,
+                                "max_tokens": 2000,
+                            },
+                        },
+                        "summary": {
+                            "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                            "name": "deepseekv3-0324",
+                            "mode": "chat",
+                            "size": 8000,
+                            "completion_params": {
+                                "temperature": 0.2,
+                                "top_p": 0.75,
+                                "frequency_penalty": 0.5,
+                                "presence_penalty": 0.5,
+                                "max_tokens": 2000,
+                            },
+                        },
+                        "question": {
+                            "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                            "name": "deepseekv3-0324",
+                            "mode": "chat",
+                            "size": 8000,
+                            "completion_params": {
+                                "temperature": 0.2,
+                                "top_p": 0.75,
+                                "frequency_penalty": 0.5,
+                                "presence_penalty": 0.5,
+                                "max_tokens": 2000,
+                            },
+                        },
+                    },
+                    "md_split_by_headers": False,
+                    "md_max_header_level": 3,
+                    "doc_summary": True,
+                    "doc_summary_config": {
+                        "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                        "name": "deepseekv3-0324",
+                        "mode": "chat",
+                        "size": 32768,
+                        "completion_params": {
+                            "temperature": 0.2,
+                            "top_p": 0.75,
+                            "frequency_penalty": 0.5,
+                            "presence_penalty": 0.5,
+                            "max_tokens": 2000,
+                        },
+                    },
+                },
+            },
+            headers={
+                "accept": "application/json",
+                "X-API-Key": self.api_key,
+                "Content-Type": "application/json",
+            },
+        )
 
-        # if response.status_code != 200:
-        #     return response.status_code, response.json().get("msg")
+        if response.status_code != 200:
+            return response.status_code, response.json().get("msg")
         return 200, ""
 
     def update_dataset(
         self,
-        new_dataset:dict
+        new_dataset: dict,
+        workspace_id: str = None
     ):
+        """
+        更新知识库配置（使用 service API）
+        ----
+        Args:
+            new_dataset (dict): 知识库配置数据
+            workspace_id (str): 工作空间ID（可选）
+        """
         url = "http://10.4.49.66:18080/api/v1/service/datasets"
         headers = {
             "accept": "application/json",
             "X-API-Key": self.api_key,
             "Content-Type": "application/json",
         }
+        if workspace_id:
+            headers["X-Workspace-Id"] = workspace_id
+            headers["x-fly-tenantid"] = "00000000-0000-0000-0000-000000000000"
 
         response = requests.put(url, json=new_dataset, headers=headers)
 
@@ -282,16 +293,18 @@ class LingyanDataset:
         task_type="normal",
         image_task=False,
         parse_enhance=True,
+        workspace_id=None,
     ):
         """
-        创建文档任务
+        创建文档任务（使用 service API）
         ----
         Args:
             dataset_id (str): 知识库ID
-            file_id (str): 文件ID
+            document_id (str): 文档ID
             split_mode (str): 切分模式
                 - auto: 自动切分
                 - semantic: 语义化切分
+                - common: 普通切分
             task_type (str): 任务类型
                 - normal: 普通任务
                 - image: 图片任务
@@ -299,107 +312,102 @@ class LingyanDataset:
             parse_enhance (bool): 是否增强解析
                 - True: 精准解析
                 - False: 目录解析
+            workspace_id (str): 工作空间ID（可选）
         """
         url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset_id}/documents/{document_id}/tasks"
+
+        headers = {
+            "accept": "application/json",
+            "X-API-Key": self.api_key,
+            "Content-Type": "application/json",
+        }
+        if workspace_id:
+            headers["X-Workspace-Id"] = workspace_id
+            headers["x-fly-tenantid"] = "00000000-0000-0000-0000-000000000000"
 
         payload = {
             "dataset_id": dataset_id,
             "document_id": document_id,
             "splitter_mode": split_mode,
             "type": task_type,
-            # "processing_config": {
-            #     "chunk_size": 2000,
-            #     "overlap": 50,
-            #     "chinese_title_enhance": False,
-            #     "process_type": "NORMAL",
-            #     "separators": "\\n",
-            #     "replace_spaces_tabs": False,
-            #     "delete_url_email": False,
-            #     "parse_enhance": parse_enhance,
-            #     "parse_toc": not parse_enhance,
-            #     "index_config": {
-            #         "title": {
-            #             "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-            #             "name": "deepseekv3-0324",
-            #             "mode": "chat",
-            #             "size": 8000,
-            #             "completion_params": {
-            #                 "temperature": 0.2,
-            #                 "top_p": 0.75,
-            #                 "frequency_penalty": 0.5,
-            #                 "presence_penalty": 0.5,
-            #                 "max_tokens": 2000,
-            #             },
-            #         },
-            #         "summary": {
-            #             "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-            #             "name": "deepseekv3-0324",
-            #             "mode": "chat",
-            #             "size": 8000,
-            #             "completion_params": {
-            #                 "temperature": 0.2,
-            #                 "top_p": 0.75,
-            #                 "frequency_penalty": 0.5,
-            #                 "presence_penalty": 0.5,
-            #                 "max_tokens": 2000,
-            #             },
-            #         },
-            #         "question": {
-            #             "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-            #             "name": "deepseekv3-0324",
-            #             "mode": "chat",
-            #             "size": 8000,
-            #             "completion_params": {
-            #                 "temperature": 0.2,
-            #                 "top_p": 0.75,
-            #                 "frequency_penalty": 0.5,
-            #                 "presence_penalty": 0.5,
-            #                 "max_tokens": 2000,
-            #             },
-            #         },
-            #     },
-            #     "md_split_by_headers": False,
-            #     "md_max_header_level": 3,
-            #     "doc_summary": True,
-            #     "doc_summary_config": {
-            #         "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-            #         "name": "deepseekv3-0324",
-            #         "mode": "chat",
-            #         "size": 32768,
-            #         "completion_params": {
-            #             "temperature": 0.2,
-            #             "top_p": 0.75,
-            #             "frequency_penalty": 0.5,
-            #             "presence_penalty": 0.5,
-            #             "max_tokens": 2000,
-            #         },
-            #     },
-            # },
+            "processing_config": {
+                "chunk_size": 2000,
+                "overlap": 30,
+                "chinese_title_enhance": False,
+                "process_type": "NORMAL",
+                "separators": "\\n",
+                "replace_spaces_tabs": "1",
+                "delete_url_email": "1",
+                "parse_enhance": parse_enhance,
+                "parse_toc": not parse_enhance,
+                "index_config": {
+                    "title": {
+                        "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                        "name": "qwen-turbo",
+                        "mode": "chat",
+                        "size": 32768,
+                        "completion_params": {
+                            "temperature": 0.2,
+                            "top_p": 0.75,
+                            "max_tokens": 512,
+                        },
+                    },
+                    "summary": {
+                        "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                        "name": "qwen-turbo",
+                        "mode": "chat",
+                        "size": 32768,
+                        "completion_params": {
+                            "temperature": 0.2,
+                            "top_p": 0.75,
+                            "max_tokens": 512,
+                        },
+                    },
+                    "question": {
+                        "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                        "name": "qwen-turbo",
+                        "mode": "chat",
+                        "size": 32768,
+                        "completion_params": {
+                            "temperature": 0.2,
+                            "top_p": 0.75,
+                            "max_tokens": 8192,
+                        },
+                    },
+                },
+                "md_split_by_headers": False,
+                "md_max_header_level": 3,
+                "doc_summary": True,
+                "doc_summary_config": {
+                    "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                    "name": "qwen-turbo",
+                    "mode": "chat",
+                    "size": 32768,
+                    "completion_params": {
+                        "temperature": 0.2,
+                        "top_p": 0.75,
+                        "max_tokens": 512,
+                    },
+                },
+            },
         }
 
         # 如果是图片任务，则需要添加图片索引
         if image_task:
             payload["processing_config"]["index_config"]["image"] = {
-                "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                "provider": "langgenius/tongyi/tongyi",
                 "name": "qwen2.5-vl-7b-instruct",
                 "mode": "chat",
-                "size": 8192,
                 "completion_params": {
                     "temperature": 0.2,
                     "top_p": 0.75,
                     "max_tokens": 8192,
+                    "seed": 1234,
+                    "repetition_penalty": 1.1,
                 },
             }
 
-        response = requests.post(
-            url,
-            json=payload,
-            headers={
-                "accept": "application/json",
-                "X-API-Key": self.api_key,
-                "Content-Type": "application/json",
-            },
-        )
+        response = requests.post(url, json=payload, headers=headers)
         if response.status_code != 200:
             return response.status_code, response.json().get("msg")
         return 200, response.json().get("data")
@@ -432,12 +440,13 @@ class LingyanDataset:
             response.json().get("data").get("duplicate_count"),
         )
 
-    def list_documents(self, dataset_id: str):
+    def list_documents(self, dataset_id: str, workspace_id: str = None):
         """
-        获取文档列表
+        获取文档列表（使用 service API）
         ----
         Args:
             dataset_id (str): 知识库ID
+            workspace_id (str): 工作空间ID（可选，用于请求头）
         Returns:
             status_code (int): 状态码
             data (list): 数据
@@ -445,10 +454,19 @@ class LingyanDataset:
         url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset_id}/documents"
         documents = []
         current_page = 1
+        
+        headers = {
+            "accept": "application/json",
+            "X-API-Key": self.api_key,
+        }
+        if workspace_id:
+            headers["X-Workspace-Id"] = workspace_id
+            headers["x-fly-tenantid"] = "00000000-0000-0000-0000-000000000000"
+        
         while True:
             response = requests.get(
                 url,
-                headers={"accept": "application/json", "X-API-Key": self.api_key},
+                headers=headers,
                 params={"page_size": 1000, "page": current_page},
             )
 
