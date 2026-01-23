@@ -1,3 +1,30 @@
+"""
+灵眼AI核心模块
+================
+
+本模块封装了灵眼AI平台的核心API接口，提供以下功能：
+
+1. LingyanAi - 对话服务：与大模型进行对话交互
+2. LingyanFile - 文件服务：文件上传、下载
+3. LingyanDataset - 知识库服务：知识库管理、文档管理、任务管理
+
+使用示例：
+--------
+    # 对话服务
+    ai = LingyanAi(app_id="xxx", api_key="xxx")
+    status, answer = ai.chat(prompt="你好", inputs_obj={})
+
+    # 文件服务
+    file_service = LingyanFile(api_key="xxx")
+    status, data = file_service.upload_file("test.pdf", "dataset")
+
+    # 知识库服务
+    dataset_service = LingyanDataset(api_key="xxx")
+    status, datasets = dataset_service.list_datasets(workspace_id="xxx")
+
+API基础地址: http://10.4.49.66:18080/api/v1/service/
+"""
+
 import json
 import os
 import requests
@@ -8,13 +35,43 @@ log = logging.getLogger("LingyanAi")
 
 
 class LingyanAi:
+    """
+    灵眼AI对话服务类
+    
+    用于与灵眼AI大模型进行对话交互，支持chatflow应用的调用。
+    
+    Attributes:
+        app_id (str): 应用ID
+        api_key (str): API密钥
+        stream (bool): 是否使用流式输出（暂未实现）
+    """
+    
     def __init__(self, app_id: str, api_key: str, stream: bool = False):
+        """
+        初始化对话服务
+        
+        Args:
+            app_id (str): chatflow应用的ID
+            api_key (str): API访问密钥
+            stream (bool): 是否使用流式输出，默认False
+        """
         self.app_id = app_id
         self.api_key = api_key
         self.stream = stream
 
-    def chat(self, prompt: str, inputs_obj: dict) -> str:
-        # 模拟调用大模型接口
+    def chat(self, prompt: str, inputs_obj: dict) -> tuple[int, str]:
+        """
+        与大模型进行对话
+        
+        Args:
+            prompt (str): 用户输入的提示词
+            inputs_obj (dict): 输入参数对象，用于传递给chatflow的变量
+            
+        Returns:
+            tuple[int, str]: (状态码, 回答内容)
+                - 200: 成功
+                - 其他: 失败
+        """
         url = f"http://10.4.49.66:18080/api/v1/service/apps/chatflow/{self.app_id}/chat-messages"
 
         payload = {
@@ -42,7 +99,22 @@ class LingyanAi:
 
 
 class LingyanFile:
+    """
+    灵眼AI文件服务类
+    
+    用于文件的上传和下载操作，支持多种业务类型的文件管理。
+    
+    Attributes:
+        api_key (str): API密钥
+    """
+    
     def __init__(self, api_key: str) -> None:
+        """
+        初始化文件服务
+        
+        Args:
+            api_key (str): API访问密钥
+        """
         self.api_key = api_key
 
     def upload_file(self, file_path: str, file_type: str = "app") -> tuple[int, dict]:
@@ -90,12 +162,37 @@ class LingyanFile:
         return response.status_code, response.json().get("data")
 
 
-    def download_file(self, file_id: str):
+    def download_file(self, file_id: str) -> tuple[int, bytes]:
+        """
+        下载文件
+        
+        Args:
+            file_id (str): 文件ID
+            
+        Returns:
+            tuple[int, bytes]: (状态码, 文件二进制内容)
+        """
         url = f"http://10.4.49.66:18080/api/v1/service/files/{file_id}/download"
         response = requests.get(url, headers={"accept": "application/json", "X-API-Key": self.api_key})
         return response.status_code, response.content
 
-def build_file_info(file_info):
+def build_file_info(file_info: dict) -> dict:
+    """
+    构建文件信息对象
+    
+    将上传返回的文件信息转换为标准格式，用于后续API调用。
+    
+    Args:
+        file_info (dict): 上传文件后返回的文件信息
+            - name: 文件名
+            - size: 文件大小
+            - file_type: 文件类型
+            - mime_type: MIME类型
+            - url: 远程URL
+            
+    Returns:
+        dict: 标准化的文件信息对象
+    """
     input_file = {
         "id": None,
         "filename": file_info.get("name"),
@@ -110,10 +207,49 @@ def build_file_info(file_info):
 
 
 class LingyanDataset:
+    """
+    灵眼AI知识库服务类
+    
+    提供知识库的完整生命周期管理，包括：
+    - 知识库的创建、查询、更新
+    - 文档的上传、查询、删除
+    - 文档处理任务的创建和管理
+    - 批量操作支持
+    
+    Attributes:
+        api_key (str): API密钥
+        
+    典型工作流程:
+        1. 创建知识库 (create_dataset)
+        2. 上传文件到知识库 (create_document)
+        3. 创建处理任务 (create_task)
+        4. 等待任务完成
+    """
+    
     def __init__(self, api_key: str):
+        """
+        初始化知识库服务
+        
+        Args:
+            api_key (str): API访问密钥
+        """
         self.api_key = api_key
 
-    def list_datasets(self, workspace_id: str, folder_id: str | None = None):
+    def list_datasets(self, workspace_id: str, folder_id: str | None = None) -> tuple[int, list | str]:
+        """
+        获取知识库列表
+        
+        支持分页自动加载，会获取所有知识库数据。
+        
+        Args:
+            workspace_id (str): 工作空间ID
+            folder_id (str | None): 文件夹ID，可选，用于筛选特定文件夹下的知识库
+            
+        Returns:
+            tuple[int, list | str]: (状态码, 知识库列表或错误信息)
+                - 200: 成功，返回知识库列表
+                - 其他: 失败，返回错误信息
+        """
         url = "http://10.4.49.66:18080/api/v1/service/datasets"
         datasets = []
         current_page = 1
@@ -135,7 +271,27 @@ class LingyanDataset:
 
     def create_dataset(
         self, workspace_id: str, name: str, folder_id: str, description: str = ""
-    ):
+    ) -> tuple[int, str]:
+        """
+        创建知识库
+        
+        使用预设的配置创建新的知识库，包括：
+        - 嵌入模型: Qwen3-Embedding-4B
+        - 切片大小: 2000
+        - 重叠: 50
+        - 索引配置: deepseekv3-0324
+        
+        Args:
+            workspace_id (str): 工作空间ID
+            name (str): 知识库名称
+            folder_id (str): 存放的文件夹ID
+            description (str): 知识库描述，默认为空
+            
+        Returns:
+            tuple[int, str]: (状态码, 错误信息)
+                - 200: 成功
+                - 其他: 失败，返回错误信息
+        """
         url = "http://10.4.49.66:18080/api/v1/service/datasets"
 
         response = requests.post(
@@ -152,7 +308,7 @@ class LingyanDataset:
                 },
                 "processing_config": {
                     "chunk_size": 2000,
-                    "overlap": 50,
+                    "overlap": 30,
                     "chinese_title_enhance": False,
                     "process_type": "NORMAL",
                     "separators": "\\n",
@@ -234,13 +390,18 @@ class LingyanDataset:
         self,
         new_dataset: dict,
         workspace_id: str = None
-    ):
+    ) -> tuple[int, dict | str]:
         """
         更新知识库配置（使用 service API）
-        ----
+        
         Args:
-            new_dataset (dict): 知识库配置数据
-            workspace_id (str): 工作空间ID（可选）
+            new_dataset (dict): 知识库配置数据，需包含知识库ID等必要字段
+            workspace_id (str): 工作空间ID（可选，用于请求头认证）
+            
+        Returns:
+            tuple[int, dict | str]: (状态码, 更新后的数据或错误信息)
+                - 200: 成功，返回更新后的知识库数据
+                - 其他: 失败，返回错误信息
         """
         url = "http://10.4.49.66:18080/api/v1/service/datasets"
         headers = {
@@ -258,13 +419,21 @@ class LingyanDataset:
             return response.status_code, response.json().get("msg")
         return 200, response.json().get("data")
 
-    def create_document(self, dataset_id: str, file_id: str):
+    def create_document(self, dataset_id: str, file_id: str) -> tuple[int, dict | str]:
         """
         创建文档
-        ----
+        
+        将已上传的文件添加到知识库中，创建对应的文档记录。
+        创建文档后需要调用 create_task 来处理文档内容。
+        
         Args:
-            dataset_id (str): 知识库ID
-            file_id (str): 文件ID
+            dataset_id (str): 目标知识库ID
+            file_id (str): 已上传文件的ID（通过 LingyanFile.upload_file 获取）
+            
+        Returns:
+            tuple[int, dict | str]: (状态码, 文档数据或错误信息)
+                - 200: 成功，返回创建的文档信息
+                - 其他: 失败，返回错误信息
         """
         url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset_id}/documents"
         payload = {
@@ -287,32 +456,47 @@ class LingyanDataset:
 
     def create_task(
         self,
-        dataset_id,
-        document_id,
-        split_mode="semantic",
-        task_type="normal",
-        image_task=False,
-        parse_enhance=True,
-        workspace_id=None,
-    ):
+        dataset_id: str,
+        document_id: str,
+        split_mode: str = "semantic",
+        task_type: str = "normal",
+        image_task: bool = False,
+        parse_enhance: bool = True,
+        workspace_id: str = None,
+    ) -> tuple[int, dict | str]:
         """
-        创建文档任务（使用 service API）
-        ----
+        创建文档处理任务（使用 service API）
+        
+        对文档进行切片、索引等处理。任务为异步执行，创建后会在后台处理。
+        
+        处理配置说明：
+        - 切片大小: 2000
+        - 重叠: 30
+        - 索引模型: qwen-turbo
+        - 支持标题、摘要、问题索引
+        - 可选图片索引（使用 qwen2.5-vl-7b-instruct）
+        
         Args:
             dataset_id (str): 知识库ID
             document_id (str): 文档ID
             split_mode (str): 切分模式
-                - auto: 自动切分
-                - semantic: 语义化切分
-                - common: 普通切分
+                - "auto": 自动切分
+                - "semantic": 语义化切分（默认，推荐）
+                - "common": 普通切分
             task_type (str): 任务类型
-                - normal: 普通任务
-                - image: 图片任务
-            image_task (bool): 是否添加图片索引
-            parse_enhance (bool): 是否增强解析
-                - True: 精准解析
-                - False: 目录解析
-            workspace_id (str): 工作空间ID（可选）
+                - "normal": 普通任务（默认）
+                - "image": 图片任务
+            image_task (bool): 是否添加图片索引，默认False
+                - True: 使用视觉模型处理图片内容
+            parse_enhance (bool): 是否增强解析，默认True
+                - True: 精准解析（推荐，解析效果更好）
+                - False: 目录解析（速度更快）
+            workspace_id (str): 工作空间ID（可选，用于请求头认证）
+            
+        Returns:
+            tuple[int, dict | str]: (状态码, 任务数据或错误信息)
+                - 200: 成功，返回任务信息
+                - 其他: 失败，返回错误信息
         """
         url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset_id}/documents/{document_id}/tasks"
 
@@ -412,17 +596,19 @@ class LingyanDataset:
             return response.status_code, response.json().get("msg")
         return 200, response.json().get("data")
 
-    def check_file(self, file_name: str, dataset_id: str):
+    def check_file(self, file_name: str, dataset_id: str) -> tuple[int, dict, int]:
         """
-        重名检测
-        ----
+        文件重名检测
+        
+        在上传文件前检查知识库中是否已存在同名文件，避免重复上传。
+        
         Args:
-            file_name (str): 文件名
-            dataset_id (str): 知识库ID
+            file_name (str): 要检查的文件名
+            dataset_id (str): 目标知识库ID
+            
         Returns:
-            status_code (int): 状态码
-            data (dict): 数据
-            duplicate_count (int): 重复数量
+            tuple[int, dict, int]: (状态码, 检测结果数据, 重复数量)
+                - duplicate_count > 0 表示存在重名文件
         """
         url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset_id}/documents/check-names"
         payload = {
@@ -440,16 +626,27 @@ class LingyanDataset:
             response.json().get("data").get("duplicate_count"),
         )
 
-    def list_documents(self, dataset_id: str, workspace_id: str = None):
+    def list_documents(self, dataset_id: str, workspace_id: str = None) -> tuple[int, list | str]:
         """
         获取文档列表（使用 service API）
-        ----
+        
+        支持分页自动加载，会获取知识库中所有文档。
+        兼容两种API返回格式（列表或带list字段的对象）。
+        
         Args:
             dataset_id (str): 知识库ID
-            workspace_id (str): 工作空间ID（可选，用于请求头）
+            workspace_id (str): 工作空间ID（可选，用于请求头认证）
+            
         Returns:
-            status_code (int): 状态码
-            data (list): 数据
+            tuple[int, list | str]: (状态码, 文档列表或错误信息)
+                - 200: 成功，返回文档列表
+                - 其他: 失败，返回错误信息
+                
+        文档对象包含字段：
+            - id: 文档ID
+            - name: 文档名称
+            - type: 文件类型
+            - status: 处理状态
         """
         url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset_id}/documents"
         documents = []
@@ -489,17 +686,23 @@ class LingyanDataset:
             log.info(f"获取文档列表成功，长度 {len(data)}，当前页码 {current_page}")
         return 200, documents
 
-    def delete_document(self, dataset_id: str, document_id: str, max_retries: int = 3):
+    def delete_document(self, dataset_id: str, document_id: str, max_retries: int = 3) -> tuple[int, dict | str]:
         """
         删除文档
-        ----
+        
+        删除知识库中的指定文档，支持自动重试。
+        删除操作会同时删除文档的所有切片和索引数据。
+        
         Args:
             dataset_id (str): 知识库ID
-            document_id (str): 文档ID
-            max_retries (int): 最大重试次数，默认3次
+            document_id (str): 要删除的文档ID
+            max_retries (int): 最大重试次数，默认3次（每次重试间隔2秒）
+            
         Returns:
-            status_code (int): 状态码
-            data (dict): 响应数据
+            tuple[int, dict | str]: (状态码, 响应数据或错误信息)
+                - 200: 成功删除
+                - 500: 请求失败（网络错误等）
+                - 其他: API返回的错误
         """
         import time
         
@@ -522,18 +725,22 @@ class LingyanDataset:
                 else:
                     return 500, f"请求失败: {str(e)}"
 
-    def delete_documents_by_types(self, dataset_id: str, file_types: list[str] = None):
+    def delete_documents_by_types(self, dataset_id: str, file_types: list[str] = None) -> tuple[int, int, list]:
         """
         删除知识库中指定类型的文档
-        ----
+        
+        批量删除指定文件类型的所有文档，适用于清理非文档文件（如图片、压缩包等）。
+        
         Args:
             dataset_id (str): 知识库ID
-            file_types (list[str]): 要删除的文件类型列表，默认为 ["png", "zip", "jpg", "jpeg"]
-                                    注意：类型不带点，如 "png" 而不是 ".png"
+            file_types (list[str]): 要删除的文件类型列表
+                - 默认: ["png", "zip", "jpg", "jpeg"]
+                - 注意：类型不带点，如 "png" 而不是 ".png"
+                - 大小写不敏感
+                
         Returns:
-            status_code (int): 状态码
-            deleted_count (int): 删除的文档数量
-            failed_list (list): 删除失败的文档列表
+            tuple[int, int, list]: (状态码, 删除成功数量, 删除失败列表)
+                - 失败列表包含: name, id, type, error 字段
         """
         if file_types is None:
             file_types = ["png", "zip", "jpg", "jpeg"]
@@ -566,18 +773,26 @@ class LingyanDataset:
 
         return 200, deleted_count, failed_list
 
-    def delete_documents_global(self, workspace_id: str, file_types: list[str] = None, folder_id: str = None):
+    def delete_documents_global(self, workspace_id: str, file_types: list[str] = None, folder_id: str = None) -> tuple[int, list, list]:
         """
         全局删除所有知识库中指定类型的文档
-        ----
+        
+        遍历工作空间（或指定文件夹）下的所有知识库，批量删除指定类型的文件。
+        适用于大规模清理操作。
+        
+        ⚠️ 警告：此操作会影响多个知识库，请谨慎使用！
+        
         Args:
             workspace_id (str): 工作空间ID
-            file_types (list[str]): 要删除的文件类型列表，默认为 ["png", "zip", "jpg", "jpeg"]
-            folder_id (str): 文件夹ID，可选
+            file_types (list[str]): 要删除的文件类型列表
+                - 默认: ["png", "zip", "jpg", "jpeg"]
+            folder_id (str): 文件夹ID（可选，限定清理范围）
+            
         Returns:
-            total_deleted (int): 总共删除的文档数量
-            total_failed (list): 所有删除失败的文档列表
-            dataset_results (list): 每个知识库的删除结果
+            tuple[int, list, list]: (总删除数量, 所有失败记录, 各知识库结果)
+                - total_failed: 包含 dataset_name 字段标识来源
+                - dataset_results: 每个知识库的 dataset_id, dataset_name, 
+                                   deleted_count, failed_count
         """
         if file_types is None:
             file_types = ["png", "zip", "jpg", "jpeg"]
