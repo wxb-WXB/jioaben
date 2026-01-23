@@ -14,6 +14,7 @@ sys.path.insert(0, os.path.join(project_root, '1_核心模块'))
 from LingyanAi import LingyanDataset, LingyanFile
 from models import FolderMap
 from utils import get_file_relative_dir, is_pdf_file, list_files, pdf_has_images
+from failed_records import FailedRecord, FailedRecordsManager
 
 # from pyfiglet import figlet_format
 # print(figlet_format("Auto Upload", font="slant"))
@@ -45,7 +46,8 @@ logging.basicConfig(
 log = logging.getLogger("autoUploads")
 
 # TODO: 修改这里的配置
-base_folder = r'C:\Users\flydiy\Desktop\r'
+base_folder = r'E:\0-智能体资料汇总收集\确定目录的资料'
+# E:\0-智能体资料汇总收集\确定目录的资料
 workspace_id = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"       # 工作区id
 api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"       # 灵燕平台 api key
 log.info(f"开始扫描目录：{base_folder}，准备上传文件到灵燕AI知识库")
@@ -60,6 +62,9 @@ stats = {
 stats_lock = Lock()
 
 dataset_lock = Lock()
+
+# 初始化失败记录管理器
+failed_manager = FailedRecordsManager()
 
 all_files_paths = list_files(
     root=base_folder,
@@ -123,8 +128,17 @@ def process_file(file_path):
     folder_id = folder_map.id if folder_map else None
     if not folder_id:
         thread_log.warning(f"未找到目录映射，跳过文件上传：{file_path}，目录：{file_classify}")
+        # 记录失败：目录映射未找到
+        failed_manager.add_record(
+            file_path=file_path,
+            file_name=os.path.basename(file_path),
+            file_classify=file_classify,
+            error_stage=FailedRecord.STAGE_FOLDER_NOT_FOUND,
+            error_message=f"目录映射未找到，目录：{file_classify}",
+            dataset_name=dataset_name,
+        )
         with stats_lock:
-            stats['skip_count'] += 1
+            stats['error_count'] += 1
         return
     thread_log.info(f"准备上传文件：{file_path}，目录：{file_classify}，目录ID：{folder_id}")
 
@@ -132,7 +146,19 @@ def process_file(file_path):
     with dataset_lock:
         response_code, datasets = lingyanDataset.list_datasets(workspace_id, folder_id)
         if response_code != 200:
-            thread_log.error(f"获取知识库列表失败，跳过文件上传：{file_path}，目录：{file_classify}，状态码：{response_code}，错误信息：{datasets}")
+            error_msg = f"状态码：{response_code}，错误信息：{datasets}"
+            thread_log.error(f"获取知识库列表失败，跳过文件上传：{file_path}，目录：{file_classify}，{error_msg}")
+            # 记录失败：获取知识库列表失败
+            failed_manager.add_record(
+                file_path=file_path,
+                file_name=os.path.basename(file_path),
+                file_classify=file_classify,
+                error_stage=FailedRecord.STAGE_LIST_DATASETS,
+                error_message=error_msg,
+                error_code=response_code,
+                dataset_name=dataset_name,
+                folder_id=folder_id,
+            )
             with stats_lock:
                 stats['error_count'] += 1
             return
@@ -155,7 +181,19 @@ def process_file(file_path):
                 description=f"自动上传文件生成的知识库，目录：{file_classify}",
             )
             if response_code != 200:
-                thread_log.error(f"创建知识库失败，跳过文件上传：{file_path}，目录：{file_classify}，状态码：{response_code}，错误信息：{created_ds}")
+                error_msg = f"状态码：{response_code}，错误信息：{created_ds}"
+                thread_log.error(f"创建知识库失败，跳过文件上传：{file_path}，目录：{file_classify}，{error_msg}")
+                # 记录失败：创建知识库失败
+                failed_manager.add_record(
+                    file_path=file_path,
+                    file_name=os.path.basename(file_path),
+                    file_classify=file_classify,
+                    error_stage=FailedRecord.STAGE_CREATE_DATASET,
+                    error_message=error_msg,
+                    error_code=response_code,
+                    dataset_name=dataset_name,
+                    folder_id=folder_id,
+                )
                 with stats_lock:
                     stats['error_count'] += 1
                 return
@@ -171,7 +209,20 @@ def process_file(file_path):
         dataset_id=dataset_id
     )
     if response_code != 200:
-        thread_log.error(f"重名检测请求失败，跳过文件上传：{file_path}，状态码：{response_code}，错误信息：{response}")
+        error_msg = f"状态码：{response_code}，错误信息：{response}"
+        thread_log.error(f"重名检测请求失败，跳过文件上传：{file_path}，{error_msg}")
+        # 记录失败：重名检测失败
+        failed_manager.add_record(
+            file_path=file_path,
+            file_name=file_name,
+            file_classify=file_classify,
+            error_stage=FailedRecord.STAGE_CHECK_FILE,
+            error_message=error_msg,
+            error_code=response_code,
+            dataset_name=dataset_name,
+            folder_id=folder_id,
+            dataset_id=dataset_id,
+        )
         with stats_lock:
             stats['error_count'] += 1
         return
@@ -189,7 +240,20 @@ def process_file(file_path):
         file_type="dataset",
     )
     if response_code != 200:
-        thread_log.error(f"文件上传失败，跳过创建文档：{file_path}，状态码：{response_code}，错误信息：{upload_response}")
+        error_msg = f"状态码：{response_code}，错误信息：{upload_response}"
+        thread_log.error(f"文件上传失败，跳过创建文档：{file_path}，{error_msg}")
+        # 记录失败：文件上传失败
+        failed_manager.add_record(
+            file_path=file_path,
+            file_name=file_name,
+            file_classify=file_classify,
+            error_stage=FailedRecord.STAGE_UPLOAD_FILE,
+            error_message=error_msg,
+            error_code=response_code,
+            dataset_name=dataset_name,
+            folder_id=folder_id,
+            dataset_id=dataset_id,
+        )
         with stats_lock:
             stats['error_count'] += 1
         return
@@ -203,7 +267,20 @@ def process_file(file_path):
         file_id=upload_file_id,
     )
     if response_code != 200:
-        thread_log.error(f"创建文档失败：{file_path}，状态码：{response_code}，错误信息：{newDoc}")
+        error_msg = f"状态码：{response_code}，错误信息：{newDoc}"
+        thread_log.error(f"创建文档失败：{file_path}，{error_msg}")
+        # 记录失败：创建文档失败
+        failed_manager.add_record(
+            file_path=file_path,
+            file_name=file_name,
+            file_classify=file_classify,
+            error_stage=FailedRecord.STAGE_CREATE_DOCUMENT,
+            error_message=error_msg,
+            error_code=response_code,
+            dataset_name=dataset_name,
+            folder_id=folder_id,
+            dataset_id=dataset_id,
+        )
         with stats_lock:
             stats['error_count'] += 1
         return
@@ -225,11 +302,29 @@ def process_file(file_path):
         parse_enhance= is_pdf       # 如果是pdf，必须开启精准解析
     )
     if response_code != 200:
-        thread_log.error(f"创建文档任务失败：{file_path}，状态码：{response_code}，错误信息：{task_response}")
+        error_msg = f"状态码：{response_code}，错误信息：{task_response}"
+        thread_log.error(f"创建文档任务失败：{file_path}，{error_msg}")
+        # 记录失败：创建任务失败
+        failed_manager.add_record(
+            file_path=file_path,
+            file_name=file_name,
+            file_classify=file_classify,
+            error_stage=FailedRecord.STAGE_CREATE_TASK,
+            error_message=error_msg,
+            error_code=response_code,
+            dataset_name=dataset_name,
+            folder_id=folder_id,
+            dataset_id=dataset_id,
+        )
         with stats_lock:
             stats['error_count'] += 1
         return
+    
     thread_log.info(f"文档处理任务创建成功：文档ID={newDocId}，文件：{file_path}")
+    
+    # 成功后移除失败记录（如果之前有记录的话）
+    failed_manager.remove_record(file_path)
+    
     with stats_lock:
         stats['success_count'] += 1
     thread_log.info(f"文件处理完成：{file_path}")
@@ -254,7 +349,17 @@ def process_file_safe(file_path):
             console_handler.setFormatter(log_formatter)
             thread_log.addHandler(console_handler)
             thread_log.propagate = False
+        error_msg = f"未捕获的异常：{str(e)}"
         thread_log.error(f"处理文件时发生未捕获的异常：{file_path}，错误：{str(e)}")
+        # 记录失败：未知错误
+        file_classify = get_file_relative_dir(file_path, base_folder)
+        failed_manager.add_record(
+            file_path=file_path,
+            file_name=os.path.basename(file_path),
+            file_classify=file_classify,
+            error_stage=FailedRecord.STAGE_UNKNOWN,
+            error_message=error_msg,
+        )
         with stats_lock:
             stats['error_count'] += 1
 
@@ -270,6 +375,12 @@ log.info(f"总文件数：{stats['total_files']}")
 log.info(f"成功处理：{stats['success_count']}")
 log.info(f"跳过文件：{stats['skip_count']}")
 log.info(f"失败文件：{stats['error_count']}")
+
+# 输出失败记录摘要
+if stats['error_count'] > 0:
+    failed_manager.print_summary()
+    log.info(f"失败记录已保存到：{failed_manager.records_dir}")
+    log.info(f"可运行 retry_failed_uploads.py 重新上传失败的文件")
 
 # 输出每个文件夹下的文件数（去重，避免重复输出）
 unique_folders = set()
