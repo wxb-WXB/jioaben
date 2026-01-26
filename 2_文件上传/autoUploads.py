@@ -4,6 +4,8 @@ from datetime import datetime
 from concurrent.futures import ThreadPoolExecutor
 from threading import Lock, current_thread
 import logging
+import time
+import requests.exceptions
 
 # 获取脚本所在目录和项目根目录
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -48,7 +50,7 @@ log = logging.getLogger("autoUploads")
 # ============ 配置区域 ============
 # 支持多个目录同时上传，每行一个目录路径
 base_folders = [
-    r'E:\0-智能体资料汇总收集\确定2',
+    r'E:\0-智能体资料汇总收集\确定目录的资料',
     # r'E:\其他资料目录',          # 取消注释添加更多目录
     # r'D:\另一个目录\子目录',
 ]
@@ -59,8 +61,19 @@ api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"       # 灵燕平台 api
 log.info(f"配置了 {len(base_folders)} 个上传目录")
 
 # ============ 性能配置 ============
-MAX_WORKERS = 20              # 并发线程数（可根据服务器承受能力调整）
+MAX_WORKERS = 5               # 并发线程数（降低以避免服务器拒绝连接，建议3-10）
 SKIP_IMAGE_CHECK = False      # 是否跳过PDF图片检测（跳过可加速，但会关闭图片索引）
+REQUEST_INTERVAL = 0.5        # 每个请求之间的间隔时间（秒），防止请求过快
+# ==================================
+
+# ============ 过滤配置 ============
+# 需要过滤（跳过）的文件夹名称列表
+EXCLUDE_FOLDERS = [
+    "01设计管理",
+    "02科研管理",
+    "03数智管理",
+    # 可以继续添加更多需要过滤的文件夹
+]
 # ==================================
 
 # 统计信息（使用线程安全的字典）
@@ -71,6 +84,54 @@ stats = {
     'error_count': 0
 }
 stats_lock = Lock()
+
+# 请求限流器（控制全局请求速率）
+last_request_time = 0
+request_lock = Lock()
+
+def rate_limited_sleep():
+    """
+    请求限流：确保请求之间有足够的间隔
+    """
+    global last_request_time
+    with request_lock:
+        current_time = time.time()
+        elapsed = current_time - last_request_time
+        if elapsed < REQUEST_INTERVAL:
+            time.sleep(REQUEST_INTERVAL - elapsed)
+        last_request_time = time.time()
+
+def retry_on_connection_error(max_retries=3, base_delay=2):
+    """
+    连接错误重试装饰器
+    
+    Args:
+        max_retries: 最大重试次数
+        base_delay: 基础延迟时间（秒），每次重试会指数增长
+    """
+    def decorator(func):
+        def wrapper(*args, **kwargs):
+            thread_name = current_thread().name
+            thread_log = logging.getLogger(f"autoUploads-{thread_name}")
+            
+            for attempt in range(max_retries + 1):
+                try:
+                    # 每次请求前进行限流
+                    rate_limited_sleep()
+                    return func(*args, **kwargs)
+                except (requests.exceptions.ConnectionError, 
+                        requests.exceptions.Timeout,
+                        requests.exceptions.ChunkedEncodingError) as e:
+                    if attempt < max_retries:
+                        delay = base_delay * (2 ** attempt)  # 指数退避
+                        thread_log.warning(f"连接错误，{delay}秒后重试 ({attempt + 1}/{max_retries}): {str(e)}")
+                        time.sleep(delay)
+                    else:
+                        thread_log.error(f"连接错误，已达最大重试次数: {str(e)}")
+                        raise
+            return func(*args, **kwargs)
+        return wrapper
+    return decorator
 
 # 知识库缓存：避免重复查询同一个folder_id下的知识库
 # key: folder_id, value: {dataset_name: dataset_id}
@@ -83,9 +144,28 @@ failed_manager = FailedRecordsManager()
 # 初始化成功记录管理器（用于跳过已上传的文件）
 success_manager = SuccessRecordsManager()
 
+# 检查文件路径是否包含需要过滤的文件夹
+def should_exclude_file(file_path):
+    """
+    检查文件路径是否包含需要过滤的文件夹
+    
+    Args:
+        file_path: 文件的相对路径
+    
+    Returns:
+        bool: 如果应该过滤则返回True，否则返回False
+    """
+    # 将路径分割成各个部分
+    path_parts = file_path.replace("\\", "/").split("/")
+    for exclude_folder in EXCLUDE_FOLDERS:
+        if exclude_folder in path_parts:
+            return True
+    return False
+
 # 扫描所有配置的目录，收集文件路径和对应的base_folder
 # all_files_info: [(file_path, base_folder), ...]
 all_files_info = []
+excluded_count = 0
 for base_folder in base_folders:
     if not os.path.exists(base_folder):
         log.warning(f"目录不存在，跳过：{base_folder}")
@@ -99,7 +179,13 @@ for base_folder in base_folders:
     )
     log.info(f"  发现 {len(files)} 个文件")
     for f in files:
+        if should_exclude_file(f):
+            excluded_count += 1
+            continue
         all_files_info.append((f, base_folder))
+
+if excluded_count > 0:
+    log.info(f"已过滤 {excluded_count} 个文件（来自排除的文件夹：{EXCLUDE_FOLDERS}）")
 
 log.info(f"扫描完成，共发现 {len(all_files_info)} 个文件")
 

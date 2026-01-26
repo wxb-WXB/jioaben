@@ -1,14 +1,21 @@
 """
 全局删除知识库中的 PNG、ZIP 等格式文件
 """
+import sys
+import os
 import logging
 from datetime import datetime
-import os
+
+# 添加项目根目录和核心模块目录到 Python 路径
+script_dir = os.path.dirname(os.path.abspath(__file__))
+project_root = os.path.dirname(script_dir)
+sys.path.insert(0, project_root)
+sys.path.insert(0, os.path.join(project_root, "1_核心模块"))
 
 from LingyanAi import LingyanDataset
 
-# 确保logs文件夹存在
-logs_dir = "logs"
+# 确保logs文件夹存在（使用项目根目录）
+logs_dir = os.path.join(project_root, "logs")
 if not os.path.exists(logs_dir):
     os.makedirs(logs_dir)
 
@@ -33,7 +40,7 @@ api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"    # 灵燕平台 API Ke
 
 # 要删除的文件类型列表（注意：不带点，如 "png" 而不是 ".png"）
 # 这里的类型对应文档的 type 字段，如 pdf, docx, png, jpg, zip 等
-file_types_to_delete = ["png", "zip", "jpg", "jpeg","mp4"]
+file_types_to_delete = ["png", "zip", "jpg", "jpeg","mp4","dwg",]
 # ====================================================
 
 if __name__ == "__main__":

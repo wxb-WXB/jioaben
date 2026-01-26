@@ -49,7 +49,7 @@ LLM_CONFIG = {
 
 # 处理配置
 REQUEST_INTERVAL = 3  # 每个请求成功后等待的时间（秒）
-MAX_RETRIES = 3       # 单个文档最大重试次数
+MAX_RETRIES = 1       # 单个文档最大重试次数
 RETRY_INTERVAL = 2   # 重试间隔（秒）
 
 # ============== 配置结束 ==============

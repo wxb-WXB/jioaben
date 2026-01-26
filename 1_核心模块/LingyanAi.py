@@ -27,11 +27,51 @@ API基础地址: http://10.4.49.66:18080/api/v1/service/
 
 import json
 import os
+import time
 import requests
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from requests_toolbelt.multipart.encoder import MultipartEncoder
 import logging
 
 log = logging.getLogger("LingyanAi")
+
+# 创建带重试机制的Session
+def create_session_with_retry(retries=3, backoff_factor=1, status_forcelist=(500, 502, 503, 504)):
+    """
+    创建带自动重试机制的requests Session
+    
+    Args:
+        retries: 重试次数
+        backoff_factor: 退避因子，重试间隔 = backoff_factor * (2 ** retry_count)
+        status_forcelist: 需要重试的HTTP状态码
+    """
+    session = requests.Session()
+    retry = Retry(
+        total=retries,
+        read=retries,
+        connect=retries,
+        backoff_factor=backoff_factor,
+        status_forcelist=status_forcelist,
+        allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"],
+    )
+    adapter = HTTPAdapter(max_retries=retry, pool_connections=10, pool_maxsize=20)
+    session.mount("http://", adapter)
+    session.mount("https://", adapter)
+    return session
+
+# 全局Session（带重试机制）
+_session = None
+
+def get_session():
+    """获取全局Session（懒加载）"""
+    global _session
+    if _session is None:
+        _session = create_session_with_retry()
+    return _session
+
+# 默认请求超时时间（秒）
+DEFAULT_TIMEOUT = 60
 
 
 class LingyanAi:
@@ -156,10 +196,15 @@ class LingyanFile:
 
         headers = {**headers, "Content-Type": encoder.content_type}  # 带 boundary
 
-        response = requests.request("POST", url, data=encoder, headers=headers)
-
-        f.close()
-        return response.status_code, response.json().get("data")
+        try:
+            session = get_session()
+            response = session.request("POST", url, data=encoder, headers=headers, timeout=DEFAULT_TIMEOUT)
+            f.close()
+            return response.status_code, response.json().get("data")
+        except requests.exceptions.RequestException as e:
+            f.close()
+            log.error(f"文件上传请求失败: {str(e)}")
+            return 500, f"请求失败: {str(e)}"
 
 
     def download_file(self, file_id: str) -> tuple[int, bytes]:
@@ -253,20 +298,26 @@ class LingyanDataset:
         url = "http://10.4.49.66:18080/api/v1/service/datasets"
         datasets = []
         current_page = 1
+        session = get_session()
         while True:
-            response = requests.get(
-                url,
-                params={"workspace_id": workspace_id, "folder_id": folder_id, "page_size": 1000, "page": current_page},
-                headers={"accept": "application/json", "X-API-Key": self.api_key},
-            )
-            if response.status_code != 200:
-                return response.status_code, response.json().get("msg")
-            data = response.json().get("data")
-            if not data or len(data) == 0:
-                break
-            datasets.extend(data)
-            current_page += 1
-            log.info(f"获取知识库列表成功，长度 {len(data)}，当前页码 {current_page}")
+            try:
+                response = session.get(
+                    url,
+                    params={"workspace_id": workspace_id, "folder_id": folder_id, "page_size": 1000, "page": current_page},
+                    headers={"accept": "application/json", "X-API-Key": self.api_key},
+                    timeout=DEFAULT_TIMEOUT,
+                )
+                if response.status_code != 200:
+                    return response.status_code, response.json().get("msg")
+                data = response.json().get("data")
+                if not data or len(data) == 0:
+                    break
+                datasets.extend(data)
+                current_page += 1
+                log.info(f"获取知识库列表成功，长度 {len(data)}，当前页码 {current_page}")
+            except requests.exceptions.RequestException as e:
+                log.error(f"获取知识库列表请求失败: {str(e)}")
+                return 500, f"请求失败: {str(e)}"
         return 200, datasets
 
     def create_dataset(
@@ -293,98 +344,104 @@ class LingyanDataset:
                 - 其他: 失败，返回错误信息
         """
         url = "http://10.4.49.66:18080/api/v1/service/datasets"
+        session = get_session()
 
-        response = requests.post(
-            url,
-            json={
-                "workspace_id": workspace_id,
-                "name": name,
-                "description": description,
-                "folder_id": folder_id,
-                "embedding_model": {
-                    "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-                    "name": "Qwen3-Embedding-4B",
-                    "size": 4096,
-                },
-                "processing_config": {
-                    "chunk_size": 2000,
-                    "overlap": 30,
-                    "chinese_title_enhance": False,
-                    "process_type": "NORMAL",
-                    "separators": "\\n",
-                    "replace_spaces_tabs": False,
-                    "delete_url_email": False,
-                    "parse_enhance": True,
-                    "parse_toc": False,
-                    "index_config": {
-                        "title": {
-                            "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-                            "name": "deepseekv3-0324",
-                            "mode": "chat",
-                            "size": 8000,
-                            "completion_params": {
-                                "temperature": 0.2,
-                                "top_p": 0.75,
-                                "frequency_penalty": 0.5,
-                                "presence_penalty": 0.5,
-                                "max_tokens": 2000,
-                            },
-                        },
-                        "summary": {
-                            "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-                            "name": "deepseekv3-0324",
-                            "mode": "chat",
-                            "size": 8000,
-                            "completion_params": {
-                                "temperature": 0.2,
-                                "top_p": 0.75,
-                                "frequency_penalty": 0.5,
-                                "presence_penalty": 0.5,
-                                "max_tokens": 2000,
-                            },
-                        },
-                        "question": {
-                            "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-                            "name": "deepseekv3-0324",
-                            "mode": "chat",
-                            "size": 8000,
-                            "completion_params": {
-                                "temperature": 0.2,
-                                "top_p": 0.75,
-                                "frequency_penalty": 0.5,
-                                "presence_penalty": 0.5,
-                                "max_tokens": 2000,
-                            },
-                        },
-                    },
-                    "md_split_by_headers": False,
-                    "md_max_header_level": 3,
-                    "doc_summary": True,
-                    "doc_summary_config": {
+        try:
+            response = session.post(
+                url,
+                json={
+                    "workspace_id": workspace_id,
+                    "name": name,
+                    "description": description,
+                    "folder_id": folder_id,
+                    "embedding_model": {
                         "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-                        "name": "deepseekv3-0324",
-                        "mode": "chat",
-                        "size": 32768,
-                        "completion_params": {
-                            "temperature": 0.2,
-                            "top_p": 0.75,
-                            "frequency_penalty": 0.5,
-                            "presence_penalty": 0.5,
-                            "max_tokens": 2000,
+                        "name": "Qwen3-Embedding-4B",
+                        "size": 4096,
+                    },
+                    "processing_config": {
+                        "chunk_size": 2000,
+                        "overlap": 30,
+                        "chinese_title_enhance": False,
+                        "process_type": "NORMAL",
+                        "separators": "\\n",
+                        "replace_spaces_tabs": False,
+                        "delete_url_email": False,
+                        "parse_enhance": True,
+                        "parse_toc": False,
+                        "index_config": {
+                            "title": {
+                                "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                                "name": "deepseekv3-0324",
+                                "mode": "chat",
+                                "size": 8000,
+                                "completion_params": {
+                                    "temperature": 0.2,
+                                    "top_p": 0.75,
+                                    "frequency_penalty": 0.5,
+                                    "presence_penalty": 0.5,
+                                    "max_tokens": 2000,
+                                },
+                            },
+                            "summary": {
+                                "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                                "name": "deepseekv3-0324",
+                                "mode": "chat",
+                                "size": 8000,
+                                "completion_params": {
+                                    "temperature": 0.2,
+                                    "top_p": 0.75,
+                                    "frequency_penalty": 0.5,
+                                    "presence_penalty": 0.5,
+                                    "max_tokens": 2000,
+                                },
+                            },
+                            "question": {
+                                "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                                "name": "deepseekv3-0324",
+                                "mode": "chat",
+                                "size": 8000,
+                                "completion_params": {
+                                    "temperature": 0.2,
+                                    "top_p": 0.75,
+                                    "frequency_penalty": 0.5,
+                                    "presence_penalty": 0.5,
+                                    "max_tokens": 2000,
+                                },
+                            },
+                        },
+                        "md_split_by_headers": False,
+                        "md_max_header_level": 3,
+                        "doc_summary": True,
+                        "doc_summary_config": {
+                            "provider": "langgenius/openai_api_compatible/openai_api_compatible",
+                            "name": "deepseekv3-0324",
+                            "mode": "chat",
+                            "size": 32768,
+                            "completion_params": {
+                                "temperature": 0.2,
+                                "top_p": 0.75,
+                                "frequency_penalty": 0.5,
+                                "presence_penalty": 0.5,
+                                "max_tokens": 2000,
+                            },
                         },
                     },
                 },
-            },
-            headers={
-                "accept": "application/json",
-                "X-API-Key": self.api_key,
-                "Content-Type": "application/json",
-            },
-        )
+                headers={
+                    "accept": "application/json",
+                    "X-API-Key": self.api_key,
+                    "Content-Type": "application/json",
+                },
+                timeout=DEFAULT_TIMEOUT,
+            )
 
-        if response.status_code != 200:
-            return response.status_code, response.json().get("msg")
-        return 200, ""
+            if response.status_code != 200:
+                return response.status_code, response.json().get("msg")
+            return 200, response.json().get("data", "")
+        except requests.exceptions.RequestException as e:
+            log.error(f"创建知识库请求失败: {str(e)}")
+            return 500, f"请求失败: {str(e)}"
 
     def update_dataset(
         self,
@@ -441,18 +498,24 @@ class LingyanDataset:
             "file_ids": [file_id],
             "processing_config": {},
         }
-        response = requests.post(
-            url,
-            json=payload,
-            headers={
-                "accept": "application/json",
-                "X-API-Key": self.api_key,
-                "Content-Type": "application/json",
-            },
-        )
-        if response.status_code != 200:
-            return response.status_code, response.json().get("msg")
-        return 200, response.json().get("data")
+        try:
+            session = get_session()
+            response = session.post(
+                url,
+                json=payload,
+                headers={
+                    "accept": "application/json",
+                    "X-API-Key": self.api_key,
+                    "Content-Type": "application/json",
+                },
+                timeout=DEFAULT_TIMEOUT,
+            )
+            if response.status_code != 200:
+                return response.status_code, response.json().get("msg")
+            return 200, response.json().get("data")
+        except requests.exceptions.RequestException as e:
+            log.error(f"创建文档请求失败: {str(e)}")
+            return 500, f"请求失败: {str(e)}"
 
     def create_task(
         self,
@@ -591,10 +654,15 @@ class LingyanDataset:
                 },
             }
 
-        response = requests.post(url, json=payload, headers=headers)
-        if response.status_code != 200:
-            return response.status_code, response.json().get("msg")
-        return 200, response.json().get("data")
+        try:
+            session = get_session()
+            response = session.post(url, json=payload, headers=headers, timeout=DEFAULT_TIMEOUT)
+            if response.status_code != 200:
+                return response.status_code, response.json().get("msg")
+            return 200, response.json().get("data")
+        except requests.exceptions.RequestException as e:
+            log.error(f"创建任务请求失败: {str(e)}")
+            return 500, f"请求失败: {str(e)}"
 
     def check_file(self, file_name: str, dataset_id: str) -> tuple[int, dict, int]:
         """
@@ -615,16 +683,22 @@ class LingyanDataset:
             "names": [file_name],
             "dataset_id": dataset_id,
         }
-        response = requests.post(
-            url,
-            json=payload,
-            headers={"accept": "application/json", "X-API-Key": self.api_key},
-        )
-        return (
-            response.status_code,
-            response.json().get("data"),
-            response.json().get("data").get("duplicate_count"),
-        )
+        try:
+            session = get_session()
+            response = session.post(
+                url,
+                json=payload,
+                headers={"accept": "application/json", "X-API-Key": self.api_key},
+                timeout=DEFAULT_TIMEOUT,
+            )
+            return (
+                response.status_code,
+                response.json().get("data"),
+                response.json().get("data").get("duplicate_count"),
+            )
+        except requests.exceptions.RequestException as e:
+            log.error(f"文件重名检测请求失败: {str(e)}")
+            return 500, {"error": str(e)}, 0
 
     def list_documents(self, dataset_id: str, workspace_id: str = None) -> tuple[int, list | str]:
         """
