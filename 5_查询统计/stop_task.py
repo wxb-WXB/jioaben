@@ -25,6 +25,9 @@ workspace_ids = [
     ("2f6118d7-20c5-48fd-8c44-b34bfab1ac30", "第二个知识库"),
 ]
 
+# 只停止指定文件夹下的任务（设为 None 则停止所有）
+TARGET_FOLDER = "01项目前期资料"
+
 
 def stop_task(dataset_id: str, document_id: str, task_id: str) -> tuple[int, dict | str]:
     """
@@ -86,9 +89,23 @@ def main():
             ds["_workspace_name"] = ws_name
         all_datasets.extend(datasets_list)
     
+    # 如果指定了目标文件夹，只保留该文件夹下的知识库
+    if TARGET_FOLDER:
+        filtered_datasets = []
+        for ds in all_datasets:
+            ds_name = ds.get("name", "")
+            # 检查知识库名称是否包含目标文件夹名
+            if TARGET_FOLDER in ds_name:
+                filtered_datasets.append(ds)
+        print(f"\n筛选 [{TARGET_FOLDER}] 相关知识库: {len(filtered_datasets)} 个")
+        all_datasets = filtered_datasets
+    
     print(f"\n总共获取到 {len(all_datasets)} 个知识库")
     print(f"\n{'='*60}")
-    print("开始查找并停止正在进行中的任务...")
+    if TARGET_FOLDER:
+        print(f"开始查找并停止 [{TARGET_FOLDER}] 文件夹下正在进行中的任务...")
+    else:
+        print("开始查找并停止正在进行中的任务...")
     print(f"{'='*60}\n")
     
     # 统计

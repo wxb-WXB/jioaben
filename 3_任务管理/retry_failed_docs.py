@@ -24,7 +24,8 @@ api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
 
 # workspace ID 配置 (workspace_id, workspace_name)
 workspace_ids = [
-    ("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "科技数智部知识库"),
+    ("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "环北知识库"),
+    # ("2f6118d7-20c5-48fd-8c44-b34bfab1ac30", "第二个知识库"),
 ]
 
 # 只处理指定目录下的知识库（为空则处理所有目录）

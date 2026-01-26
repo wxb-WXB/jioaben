@@ -16,7 +16,6 @@ import os
 import time
 import logging
 from datetime import datetime
-from concurrent.futures import ThreadPoolExecutor
 from threading import Lock
 
 # 添加项目根目录和核心模块目录到 Python 路径
@@ -33,13 +32,13 @@ API_KEY = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
 # 工作空间配置
 WORKSPACE_IDS = [
     ("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "环北知识库"),
-    ("2f6118d7-20c5-48fd-8c44-b34bfab1ac30", "第二个知识库"),
+    # ("2f6118d7-20c5-48fd-8c44-b34bfab1ac30", "第二个知识库"),
 ]
 
 # 文件大小分段（单位：MB）
 # 格式：[(最小MB, 最大MB, 描述), ...]
 SIZE_RANGES = [
-    (0, 10, "0-10M"),
+    (0, 10, "1-10M"),
     (10, 20, "10-20M"),
     (20, 30, "20-30M"),
     (30, 40, "30-40M"),
@@ -47,12 +46,13 @@ SIZE_RANGES = [
     (50, float('inf'), "50M+"),
 ]
 
-# 并发配置
-MAX_WORKERS = 5          # 并发线程数
-REQUEST_INTERVAL = 0.5   # 请求间隔（秒）
+# 批量配置
+MAX_RUNNING_TASKS = 20   # 保持同时运行的任务数量
+CHECK_INTERVAL = 30      # 检查任务状态的间隔（秒）
+REQUEST_INTERVAL = 0.3   # 每个请求之间的间隔（秒）
 
 # 是否为测试模式（只统计不执行）
-DRY_RUN = True
+DRY_RUN = False
 # ==================================
 
 # 配置日志
@@ -127,6 +127,27 @@ def get_size_range_label(size_mb):
         if min_mb <= size_mb < max_mb:
             return label
     return "未知"
+
+
+def get_file_type_priority(doc_name):
+    """
+    获取文件类型优先级（数字越小优先级越高）
+    Word 优先，PDF 其次，其他最后
+    """
+    if not doc_name:
+        return 99
+    
+    name_lower = doc_name.lower()
+    
+    # Word 文件优先级最高
+    if name_lower.endswith(('.doc', '.docx')):
+        return 1
+    # PDF 其次
+    elif name_lower.endswith('.pdf'):
+        return 2
+    # 其他文件
+    else:
+        return 3
 
 
 def get_doc_status(doc):
@@ -209,38 +230,80 @@ def start_vector_task(lingyan_dataset, dataset_id, document_id, doc_name, size_m
         return False
 
 
-def process_size_range(lingyan_dataset, docs_by_size, size_label):
+def process_all_docs_with_pool(lingyan_dataset, all_docs, all_datasets):
     """
-    处理某个大小区间的所有文档
+    保持固定数量的任务同时运行：
+    - 先启动 MAX_RUNNING_TASKS 个任务
+    - 然后每隔 CHECK_INTERVAL 秒补充新任务，保持总数为 MAX_RUNNING_TASKS
+    - 使用本地计数器跟踪已启动的任务，避免频繁查询API
     """
-    docs = docs_by_size.get(size_label, [])
-    if not docs:
-        log.info(f"[{size_label}] 没有需要向量化的文档")
+    total = len(all_docs)
+    if total == 0:
+        log.info("没有需要向量化的文档")
         return
     
     log.info(f"\n{'='*60}")
-    log.info(f"开始处理 [{size_label}] 区间的文档，共 {len(docs)} 个")
+    log.info(f"开始处理，共 {total} 个文档")
+    log.info(f"保持 {MAX_RUNNING_TASKS} 个任务同时运行")
     log.info(f"{'='*60}")
     
-    # 按文件大小从小到大排序
-    docs.sort(key=lambda x: x['size_mb'])
+    # 排序：先按大小区间，再按文件类型（Word优先，PDF其次），再按文件大小
+    all_docs.sort(key=lambda x: (
+        SIZE_RANGES.index(next((r for r in SIZE_RANGES if r[2] == x['size_label']), SIZE_RANGES[0])),
+        get_file_type_priority(x['doc_name']),
+        x['size_mb']
+    ))
     
-    for doc_info in docs:
-        success = start_vector_task(
-            lingyan_dataset,
-            doc_info['dataset_id'],
-            doc_info['doc_id'],
-            doc_info['doc_name'],
-            doc_info['size_mb']
-        )
+    idx = 0  # 待启动文档的索引
+    active_tasks = 0  # 当前活跃的任务数（本地计数）
+    
+    while idx < total:
+        # 计算本次要启动的数量
+        available_slots = MAX_RUNNING_TASKS - active_tasks
+        to_start = min(available_slots, total - idx)
         
-        with stats_lock:
-            if success:
-                stats['started_count'] += 1
-            else:
-                stats['error_count'] += 1
+        if to_start > 0:
+            log.info(f"\n{'='*60}")
+            log.info(f"当前活跃任务: {active_tasks} 个，可启动: {available_slots} 个")
+            log.info(f"准备启动第 {idx+1} ~ {idx+to_start} 个文档（共 {to_start} 个）")
+            log.info(f"剩余待处理: {total - idx - to_start} 个")
+            log.info(f"{'='*60}")
+            
+            # 启动任务
+            for i in range(to_start):
+                doc_info = all_docs[idx]
+                success = start_vector_task(
+                    lingyan_dataset,
+                    doc_info['dataset_id'],
+                    doc_info['doc_id'],
+                    doc_info['doc_name'],
+                    doc_info['size_mb']
+                )
+                
+                with stats_lock:
+                    if success:
+                        stats['started_count'] += 1
+                        active_tasks += 1
+                    else:
+                        stats['error_count'] += 1
+                
+                idx += 1
+        
+        # 如果还有更多文档，等待一段时间，假设部分任务已完成
+        if idx < total:
+            log.info(f"\n本轮启动完成，等待 {CHECK_INTERVAL} 秒...")
+            log.info(f"已启动: {stats['started_count']} / {total}")
+            time.sleep(CHECK_INTERVAL)
+            
+            # 假设每轮有一定比例的任务完成（估计值）
+            # 这里假设每轮完成约 1/3 的活跃任务
+            completed_estimate = max(1, active_tasks // 3)
+            active_tasks = max(0, active_tasks - completed_estimate)
+            log.info(f"估计已完成 {completed_estimate} 个任务，当前活跃任务约 {active_tasks} 个")
     
-    log.info(f"[{size_label}] 处理完成")
+    log.info(f"\n{'='*60}")
+    log.info(f"所有 {total} 个文档的任务已启动完成")
+    log.info(f"{'='*60}")
 
 
 def main():
@@ -299,15 +362,17 @@ def main():
                     stats['need_vector_docs'] += 1
                     
                     size_label = get_size_range_label(size_mb)
-                    docs_by_size[size_label].append({
+                    doc_info = {
                         'dataset_id': dataset_id,
                         'dataset_name': dataset_name,
                         'doc_id': doc_id,
                         'doc_name': doc_name,
                         'size_bytes': size_bytes,
                         'size_mb': size_mb,
+                        'size_label': size_label,
                         'workspace': ws_name,
-                    })
+                    }
+                    docs_by_size[size_label].append(doc_info)
                     size_stats[size_label] += 1
                 else:
                     stats['skipped_count'] += 1
@@ -334,7 +399,8 @@ def main():
     
     # 确认是否继续
     if not DRY_RUN:
-        log.info(f"\n即将按顺序开始 {stats['need_vector_docs']} 个文档的向量化任务...")
+        log.info(f"\n即将启动 {stats['need_vector_docs']} 个文档的向量化任务...")
+        log.info(f"保持 {MAX_RUNNING_TASKS} 个任务同时运行，完成一个补充一个")
         log.info("按 Ctrl+C 取消，3秒后开始...")
         try:
             time.sleep(3)
@@ -342,9 +408,13 @@ def main():
             log.info("已取消")
             return
     
-    # 按大小区间顺序处理
-    for min_mb, max_mb, label in SIZE_RANGES:
-        process_size_range(lingyan_dataset, docs_by_size, label)
+    # 合并所有文档到一个列表
+    all_docs = []
+    for _, _, label in SIZE_RANGES:
+        all_docs.extend(docs_by_size[label])
+    
+    # 保持固定数量任务运行
+    process_all_docs_with_pool(lingyan_dataset, all_docs, all_datasets)
     
     # 最终统计
     log.info(f"\n{'='*60}")

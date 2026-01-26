@@ -63,24 +63,22 @@ def get_folder_path(folder_id):
 def get_doc_status(doc):
     """
     从文档的 tasks 字段获取向量化任务状态
-    优先查找 type=normal 的任务（向量化任务）
+    优先查找 type=normal 的任务（向量化任务），取最新的一个
     状态值：success/completed=成功, failed/error=失败, indexing/parsing/waiting=进行中
     """
     tasks = doc.get("tasks", [])
     if not tasks:
         return "no_task", None  # 没有任务
     
-    # 优先查找 type=normal 的任务（这是向量化任务）
-    normal_task = None
-    for task in tasks:
-        if task.get("type") == "normal":
-            normal_task = task
-            break
+    # 查找所有 type=normal 的任务（向量化任务），取最新的一个（最后一个）
+    normal_tasks = [t for t in tasks if t.get("type") == "normal"]
     
-    # 如果没有 normal 任务，取最新的任务
-    if normal_task:
-        return normal_task.get("status", "unknown"), normal_task.get("type")
+    if normal_tasks:
+        # 取最后一个 normal 任务（最新的）
+        latest_normal = normal_tasks[-1]
+        return latest_normal.get("status", "unknown"), latest_normal.get("type")
     else:
+        # 如果没有 normal 任务，取最后一个任务
         latest_task = tasks[-1]
         return latest_task.get("status", "unknown"), latest_task.get("type")
 
@@ -230,19 +228,29 @@ ws1_indexing = sum(1 for doc in indexing_docs if doc["workspace"] == ws1_name)
 ws2_indexing = sum(1 for doc in indexing_docs if doc["workspace"] == ws2_name)
 ws1_error = sum(1 for doc in error_docs if doc["workspace"] == ws1_name)
 ws2_error = sum(1 for doc in error_docs if doc["workspace"] == ws2_name)
+ws1_cancelled = sum(1 for doc in cancelled_docs if doc["workspace"] == ws1_name)
+ws2_cancelled = sum(1 for doc in cancelled_docs if doc["workspace"] == ws2_name)
+ws1_no_task = sum(1 for doc in no_task_docs if doc["workspace"] == ws1_name)
+ws2_no_task = sum(1 for doc in no_task_docs if doc["workspace"] == ws2_name)
 
 total_success = ws1_success + ws2_success
 total_indexing = ws1_indexing + ws2_indexing
 total_error = ws1_error + ws2_error
+total_cancelled = ws1_cancelled + ws2_cancelled
+total_no_task = ws1_no_task + ws2_no_task
+
+# 计算每个工作空间的总文档数
+ws1_total = ws1_success + ws1_indexing + ws1_error + ws1_cancelled + ws1_no_task
+ws2_total = ws2_success + ws2_indexing + ws2_error + ws2_cancelled + ws2_no_task
 
 print(f"\n{'='*60}")
 print(f"最终汇总统计")
 print(f"{'='*60}")
 print(f"")
-print(f"  工作空间                      成功      进行中      失败")
-print(f"  {'-'*55}")
-print(f"  {ws1_name}                  {ws1_success:>8}    {ws1_indexing:>8}    {ws1_error:>8}")
-print(f"  {ws2_name}              {ws2_success:>8}    {ws2_indexing:>8}    {ws2_error:>8}")
-print(f"  {'-'*55}")
-print(f"  【总计】                    {total_success:>8}    {total_indexing:>8}    {total_error:>8}")
+print(f"  工作空间            总数      成功    进行中      失败    已取消    无任务")
+print(f"  {'-'*75}")
+print(f"  {ws1_name}      {ws1_total:>8}  {ws1_success:>8}  {ws1_indexing:>8}  {ws1_error:>8}  {ws1_cancelled:>8}  {ws1_no_task:>8}")
+print(f"  {ws2_name}  {ws2_total:>8}  {ws2_success:>8}  {ws2_indexing:>8}  {ws2_error:>8}  {ws2_cancelled:>8}  {ws2_no_task:>8}")
+print(f"  {'-'*75}")
+print(f"  【总计】          {total_docs:>8}  {total_success:>8}  {total_indexing:>8}  {total_error:>8}  {total_cancelled:>8}  {total_no_task:>8}")
 print(f"")
