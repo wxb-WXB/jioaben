@@ -80,7 +80,7 @@ MAX_WORKERS = 20              # 并发线程数
 # ==================================
 
 # Excel文件扩展名
-EXCEL_EXTENSIONS = ['.xls', '.xlsx', '.xlsm', '.xlsb', '.xlt', '.xltx', '.xltm']
+EXCEL_EXTENSIONS = ['.xlsx', '.xls', '.csv']
 
 # 统计信息
 stats = {
@@ -360,20 +360,114 @@ def process_file(file_info):
     newDocId = newDoc[0].get("id")
     thread_log.info(f"文档创建成功：文档ID={newDocId}，文件：{file_path}")
 
-    # Excel文件不需要精准解析和图片索引
-    thread_log.info("Excel文件：关闭精准解析，关闭图片索引")
+    # Excel文件处理流程：解析工作表 -> 解析表头 -> 创建任务
+    thread_log.info("Excel文件：开始解析工作表和表头")
 
-    # 新建任务
-    thread_log.info(f"开始创建文档处理任务：文档ID={newDocId}，知识库ID={dataset_id}")
-    response_code, task_response = lingyanDataset.create_task(
-        dataset_id,
-        newDocId,
-        image_task=False,       # Excel不需要图片索引
-        parse_enhance=False     # Excel不需要精准解析
+    # 步骤1：解析Excel工作表
+    thread_log.info(f"开始解析Excel工作表：文件ID={upload_file_id}")
+    response_code, sheets = lingyanDataset.parse_excel_sheets(
+        file_id=upload_file_id,
+        workspace_id=workspace_id
+    )
+    if response_code != 200:
+        error_msg = f"状态码：{response_code}，错误信息：{sheets}"
+        thread_log.error(f"解析Excel工作表失败：{file_path}，{error_msg}")
+        failed_manager.add_record(
+            file_path=file_path,
+            file_name=file_name,
+            file_classify=file_classify,
+            error_stage="parse_excel_sheets",
+            error_message=error_msg,
+            error_code=response_code,
+            dataset_name=dataset_name,
+            folder_id=folder_id,
+            dataset_id=dataset_id,
+        )
+        with stats_lock:
+            stats['error_count'] += 1
+        return
+    
+    if not sheets or len(sheets) == 0:
+        error_msg = "Excel文件没有工作表"
+        thread_log.error(f"Excel文件没有工作表：{file_path}")
+        failed_manager.add_record(
+            file_path=file_path,
+            file_name=file_name,
+            file_classify=file_classify,
+            error_stage="parse_excel_sheets",
+            error_message=error_msg,
+            dataset_name=dataset_name,
+            folder_id=folder_id,
+            dataset_id=dataset_id,
+        )
+        with stats_lock:
+            stats['error_count'] += 1
+        return
+    
+    # 默认使用第一个工作表
+    first_sheet = sheets[0]
+    sheet_name = first_sheet.get("name", "Sheet1")
+    sheet_index = first_sheet.get("index", 0)
+    thread_log.info(f"解析工作表成功：共 {len(sheets)} 个工作表，使用第一个：{sheet_name} (索引={sheet_index})")
+
+    # 步骤2：解析Excel表头
+    thread_log.info(f"开始解析Excel表头：工作表={sheet_name}，索引={sheet_index}")
+    response_code, headers = lingyanDataset.parse_excel_headers(
+        file_id=upload_file_id,
+        workspace_id=workspace_id,
+        sheet_index=sheet_index,
+        header_row=[1, 1]  # 默认第1行为表头
+    )
+    if response_code != 200:
+        error_msg = f"状态码：{response_code}，错误信息：{headers}"
+        thread_log.error(f"解析Excel表头失败：{file_path}，{error_msg}")
+        failed_manager.add_record(
+            file_path=file_path,
+            file_name=file_name,
+            file_classify=file_classify,
+            error_stage="parse_excel_headers",
+            error_message=error_msg,
+            error_code=response_code,
+            dataset_name=dataset_name,
+            folder_id=folder_id,
+            dataset_id=dataset_id,
+        )
+        with stats_lock:
+            stats['error_count'] += 1
+        return
+    
+    # 构建表头列信息
+    table_columns = []
+    if isinstance(headers, list):
+        for col in headers:
+            if isinstance(col, dict):
+                table_columns.append({
+                    "name": col.get("name", ""),
+                    "describe": col.get("describe", ""),
+                    "dataType": col.get("dataType", "String"),
+                })
+            elif isinstance(col, str):
+                table_columns.append({
+                    "name": col,
+                    "describe": "",
+                    "dataType": "String",
+                })
+    
+    thread_log.info(f"解析表头成功：共 {len(table_columns)} 列，列名：{[c['name'] for c in table_columns]}")
+
+    # 步骤3：创建Excel文档处理任务
+    thread_log.info(f"开始创建Excel文档处理任务：文档ID={newDocId}，知识库ID={dataset_id}，工作表={sheet_name}")
+    response_code, task_response = lingyanDataset.create_excel_task(
+        dataset_id=dataset_id,
+        document_id=newDocId,
+        sheet_name=sheet_name,
+        table_columns=table_columns,
+        header_range=[1, 1],
+        workspace_id=workspace_id,
     )
     if response_code != 200:
         error_msg = f"状态码：{response_code}，错误信息：{task_response}"
-        thread_log.error(f"创建文档任务失败：{file_path}，{error_msg}")
+        thread_log.error(f"创建Excel文档任务失败：{file_path}，{error_msg}")
         failed_manager.add_record(
             file_path=file_path,
             file_name=file_name,
@@ -389,7 +483,7 @@ def process_file(file_info):
             stats['error_count'] += 1
         return
     
-    thread_log.info(f"文档处理任务创建成功：文档ID={newDocId}，文件：{file_path}")
+    thread_log.info(f"Excel文档处理任务创建成功：文档ID={newDocId}，工作表={sheet_name}，文件：{file_path}")
     
     # 成功后移除失败记录
     failed_manager.remove_record(file_path)

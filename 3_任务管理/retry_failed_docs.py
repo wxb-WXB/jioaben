@@ -28,13 +28,13 @@ workspace_ids = [
 ]
 
 # 只处理指定目录下的知识库（为空则处理所有目录）
-TARGET_FOLDER_PATH = "01设计管理"  # 设置为 None 或 "" 则处理所有目录
+TARGET_FOLDER_PATH = None  # 设置为 None 或 "" 则处理所有目录
 
 # 每批处理的文档数量
 BATCH_SIZE = 20
 
 # 每批处理完后等待的时间（秒）
-WAIT_TIME = 300
+WAIT_TIME = 1200
 
 dataset_api = LingyanDataset(api_key)
 

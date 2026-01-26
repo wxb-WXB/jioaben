@@ -829,3 +829,162 @@ class LingyanDataset:
 
         log.info(f"全局删除完成，总共删除 {total_deleted} 个文档，失败 {len(total_failed)} 个")
         return total_deleted, total_failed, dataset_results
+
+    def parse_excel_sheets(self, file_id: str, workspace_id: str) -> tuple[int, list | str]:
+        """
+        解析Excel工作表列表
+        
+        获取Excel文件中的所有工作表（sheet）信息，用于后续选择要处理的工作表。
+        
+        Args:
+            file_id (str): 已上传的Excel文件ID
+            workspace_id (str): 工作空间ID
+            
+        Returns:
+            tuple[int, list | str]: (状态码, 工作表列表或错误信息)
+                - 200: 成功，返回工作表列表，每个元素包含 name, index 等信息
+                - 其他: 失败，返回错误信息
+        """
+        url = "http://10.4.49.66:18080/api/v1/console/datasets/parse-excel-sheets"
+        
+        headers = {
+            "accept": "application/json",
+            "X-API-Key": self.api_key,
+            "Content-Type": "application/json",
+            "X-Workspace-Id": workspace_id,
+            "x-fly-tenantid": "00000000-0000-0000-0000-000000000000",
+        }
+        
+        payload = {"file_id": file_id}
+        
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code != 200:
+            return response.status_code, response.json().get("msg", response.text)
+        return 200, response.json().get("data", [])
+
+    def parse_excel_headers(
+        self, 
+        file_id: str, 
+        workspace_id: str,
+        sheet_index: int = 0,
+        header_row: list = None
+    ) -> tuple[int, list | str]:
+        """
+        解析Excel表头
+        
+        获取指定工作表中的表头列信息，用于创建文档处理任务。
+        
+        Args:
+            file_id (str): 已上传的Excel文件ID
+            workspace_id (str): 工作空间ID
+            sheet_index (int): 工作表索引，默认0（第一个工作表）
+            header_row (list): 表头行范围，默认[1, 1]表示第1行为表头
+            
+        Returns:
+            tuple[int, list | str]: (状态码, 表头列列表或错误信息)
+                - 200: 成功，返回列信息列表，每个元素包含 name, dataType 等
+                - 其他: 失败，返回错误信息
+        """
+        if header_row is None:
+            header_row = [1, 1]
+            
+        url = "http://10.4.49.66:18080/api/v1/console/datasets/parse-excel-headers"
+        
+        headers = {
+            "accept": "application/json",
+            "X-API-Key": self.api_key,
+            "Content-Type": "application/json",
+            "X-Workspace-Id": workspace_id,
+            "x-fly-tenantid": "00000000-0000-0000-0000-000000000000",
+        }
+        
+        payload = {
+            "file_id": file_id,
+            "sheet_index": sheet_index,
+            "header_row": header_row
+        }
+        
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code != 200:
+            return response.status_code, response.json().get("msg", response.text)
+        return 200, response.json().get("data", [])
+
+    def create_excel_task(
+        self,
+        dataset_id: str,
+        document_id: str,
+        sheet_name: str,
+        table_columns: list,
+        header_range: list = None,
+        workspace_id: str = None,
+    ) -> tuple[int, dict | str]:
+        """
+        创建Excel文档处理任务
+        
+        专门用于处理Excel文件的任务创建，需要传入工作表名称和表头列信息。
+        
+        Args:
+            dataset_id (str): 知识库ID
+            document_id (str): 文档ID
+            sheet_name (str): 工作表名称
+            table_columns (list): 表头列信息列表，每个元素包含:
+                - name: 列名
+                - describe: 列描述（可选，默认空字符串）
+                - dataType: 数据类型（可选，默认"String"）
+            header_range (list): 表头行范围，默认[1, 1]
+            workspace_id (str): 工作空间ID（可选，用于请求头认证）
+            
+        Returns:
+            tuple[int, dict | str]: (状态码, 任务数据或错误信息)
+                - 200: 成功，返回任务信息
+                - 其他: 失败，返回错误信息
+        """
+        if header_range is None:
+            header_range = [1, 1]
+            
+        # 使用 console API 创建任务
+        url = f"http://10.4.49.66:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}/tasks"
+
+        headers = {
+            "accept": "application/json",
+            "X-API-Key": self.api_key,
+            "Content-Type": "application/json",
+        }
+        if workspace_id:
+            headers["X-Workspace-Id"] = workspace_id
+            headers["x-fly-tenantid"] = "00000000-0000-0000-0000-000000000000"
+
+        # 格式化表头列信息
+        formatted_columns = []
+        for i, col in enumerate(table_columns):
+            formatted_columns.append({
+                "name": col.get("name", f"列{i+1}"),
+                "describe": col.get("describe", ""),
+                "dataType": col.get("dataType", "String"),
+            })
+
+        payload = {
+            "dataset_id": dataset_id,
+            "document_id": document_id,
+            "type": "normal",
+            "splitter_mode": "common",
+            "processing_config": {
+                "chunk_size": 200,
+                "overlap": 50,
+                "chinese_title_enhance": False,
+                "process_type": "NORMAL",
+                "separators": "\\n",
+                "replace_spaces_tabs": True,
+                "delete_url_email": True,
+                "parse_enhance": False,
+                "parse_toc": False,
+                "header_range": header_range,
+                "sheet_name": sheet_name,
+                "table_columns": formatted_columns,
+            },
+        }
+
+        response = requests.post(url, json=payload, headers=headers)
+        if response.status_code != 200:
+            return response.status_code, response.json().get("msg", response.text)
+        return 200, response.json().get("data")

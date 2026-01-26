@@ -28,7 +28,7 @@ from models import FolderMap
 
 # API 配置
 API_KEY = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3Njk3NDEzMDF9.JWo24XAEYeTdaQIWnhcSArdNeH0NrIlqNXDWWeW8zNM"
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3Njk5OTgzODl9.KTzYjw_Q7AvxEkVo56TYghHZT_aCgP7op4TGLotZz8M"
 
 # 工作空间配置
 WORKSPACE_ID = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"
@@ -367,7 +367,11 @@ def scan_and_generate(workspace_id, workspace_name):
                             log.info(f"    等待 {RETRY_INTERVAL} 秒后重试...")
                             time.sleep(RETRY_INTERVAL)
                         else:
-                            log.error(f"    [失败] 已达最大重试次数({MAX_RETRIES})")
+                            log.error(f"    [最终失败] 已达最大重试次数({MAX_RETRIES})")
+                            log.error(f"    ├─ 目录路径: {folder_path}")
+                            log.error(f"    ├─ 知识库: {dataset_name}")
+                            log.error(f"    ├─ 文档名: {doc_info['document_name']}")
+                            log.error(f"    └─ 文档ID: {doc_info['document_id']}")
                             total_fail += 1
                 
                 # 成功后等待再处理下一个
