@@ -26,7 +26,7 @@ workspace_ids = [
 ]
 
 # 只停止指定文件夹下的任务（设为 None 则停止所有）
-TARGET_FOLDER = "01项目前期资料"
+TARGET_FOLDER = None
 
 
 def stop_task(dataset_id: str, document_id: str, task_id: str) -> tuple[int, dict | str]:

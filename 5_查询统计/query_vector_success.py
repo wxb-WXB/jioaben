@@ -38,12 +38,19 @@ dataset = LingyanDataset(api_key)
 all_datasets = []
 for ws_id, ws_name in workspace_ids:
     status, datasets_list = dataset.list_datasets(ws_id)
+    if status != 200:
+        print(f"[{ws_name}] 获取知识库列表失败: {datasets_list}")
+        continue
     print(f"[{ws_name}] 获取到 {len(datasets_list)} 个知识库")
     # 给每个 dataset 添加 workspace 信息
     for ds in datasets_list:
+        # 跳过非字典类型的数据
+        if not isinstance(ds, dict):
+            print(f"[{ws_name}] 跳过非字典数据: {type(ds)} - {ds}")
+            continue
         ds["_workspace_id"] = ws_id
         ds["_workspace_name"] = ws_name
-    all_datasets.extend(datasets_list)
+        all_datasets.append(ds)
 
 print(f"\n总共获取到 {len(all_datasets)} 个知识库")
 datasets = all_datasets

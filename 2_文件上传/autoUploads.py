@@ -50,7 +50,7 @@ log = logging.getLogger("autoUploads")
 # ============ 配置区域 ============
 # 支持多个目录同时上传，每行一个目录路径
 base_folders = [
-    r'E:\0-智能体资料汇总收集\确定2',
+    r'E:\0-智能体资料汇总收集\确定目录的资料',
     # r'E:\其他资料目录',          # 取消注释添加更多目录
     # r'D:\另一个目录\子目录',
 ]
@@ -61,12 +61,12 @@ api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"       # 灵燕平台 api
 log.info(f"配置了 {len(base_folders)} 个上传目录")
 
 # ============ 性能配置 ============
-MAX_WORKERS = 5               # 并发线程数（降低以避免服务器拒绝连接，建议3-10）
-SKIP_IMAGE_CHECK = False      # 是否跳过PDF图片检测（跳过可加速，但会关闭图片索引）
-REQUEST_INTERVAL = 0.5        # 每个请求之间的间隔时间（秒），防止请求过快
+MAX_WORKERS = 8               # 并发线程数（建议3-8，太高可能导致服务器拒绝连接）
+SKIP_IMAGE_CHECK = True       # 是否跳过PDF图片检测（跳过可加速，但会关闭图片索引）
+REQUEST_INTERVAL = 0.3        # 每个请求之间的间隔时间（秒），防止请求过快
 # ==================================
 
-# ============ 过滤配置 ============
+# ============ 过滤配置 ============是
 # 需要过滤（跳过）的文件夹名称列表
 EXCLUDE_FOLDERS = [
     "01设计管理",
@@ -75,6 +75,13 @@ EXCLUDE_FOLDERS = [
     "04技术管理",
     "05标准规范",
     "工程专项管理",
+    "进度管理",
+    "征地移民管理",
+    "06参考资料/湛江市引调水方案资料",
+    "07工程专项管理",
+    "08多媒体",
+
+    # "质量管理",
     # 可以继续添加更多需要过滤的文件夹  标准规范还没有传完
 ]
 # ==================================
@@ -233,16 +240,55 @@ def process_file(file_info):
             stats['skip_count'] += 1
         return
 
-    # 检查是否为Excel文件，如果是则跳过上传
+    # 检查是否为需要跳过的文件类型
     file_ext = os.path.splitext(file_path)[1].lower()
+    
+    # 需要跳过的文件扩展名分类
     excel_extensions = ['.xls', '.xlsx', '.xlsm', '.xlsb', '.xlt', '.xltx', '.xltm']
+    archive_extensions = ['.rar', '.zip']
+    web_extensions = ['.htm', '.html', '.css', '.ico']
+    video_extensions = ['.mov', '.mp4']
+    image_extensions = ['.png', '.jpg', '.jpeg']
+    cad_extensions = ['.dwg']
+    other_skip_extensions = ['.wps', '.pptx', '.pdg', '.dat', '.xml']
+    
+    # 合并所有需要跳过的扩展名
+    all_skip_extensions = (excel_extensions + archive_extensions + web_extensions + 
+                           video_extensions + image_extensions + cad_extensions + 
+                           other_skip_extensions)
+    
     if file_ext in excel_extensions:
         thread_log.warning(f"检测到Excel文件，跳过上传：{file_path}")
         with stats_lock:
             stats['skip_count'] += 1
         return
-    elif file_ext in ['.rar', '.zip']:
+    elif file_ext in archive_extensions:
         thread_log.warning(f"检测到压缩文件，跳过上传：{file_path}")
+        with stats_lock:
+            stats['skip_count'] += 1
+        return
+    elif file_ext in web_extensions:
+        thread_log.warning(f"检测到网页/样式文件，跳过上传：{file_path}")
+        with stats_lock:
+            stats['skip_count'] += 1
+        return
+    elif file_ext in video_extensions:
+        thread_log.warning(f"检测到视频文件，跳过上传：{file_path}")
+        with stats_lock:
+            stats['skip_count'] += 1
+        return
+    elif file_ext in image_extensions:
+        thread_log.warning(f"检测到图片文件，跳过上传：{file_path}")
+        with stats_lock:
+            stats['skip_count'] += 1
+        return
+    elif file_ext in cad_extensions:
+        thread_log.warning(f"检测到CAD文件，跳过上传：{file_path}")
+        with stats_lock:
+            stats['skip_count'] += 1
+        return
+    elif file_ext in other_skip_extensions:
+        thread_log.warning(f"检测到不支持的文件类型，跳过上传：{file_path}")
         with stats_lock:
             stats['skip_count'] += 1
         return

@@ -2,7 +2,7 @@
 灵眼AI核心模块
 ================
 
-本模块封装了灵眼AI平台的核心API接口，提供以下功能：
+本模块封装了灵燕AI平台的核心API接口，提供以下功能：
 
 1. LingyanAi - 对话服务：与大模型进行对话交互
 2. LingyanFile - 文件服务：文件上传、下载
@@ -37,12 +37,12 @@ import logging
 log = logging.getLogger("LingyanAi")
 
 # 创建带重试机制的Session
-def create_session_with_retry(retries=3, backoff_factor=1, status_forcelist=(500, 502, 503, 504)):
+def create_session_with_retry(retries=5, backoff_factor=1.5, status_forcelist=(500, 502, 503, 504)):
     """
     创建带自动重试机制的requests Session
     
     Args:
-        retries: 重试次数
+        retries: 重试次数（增加到5次以应对不稳定连接）
         backoff_factor: 退避因子，重试间隔 = backoff_factor * (2 ** retry_count)
         status_forcelist: 需要重试的HTTP状态码
     """
@@ -54,6 +54,8 @@ def create_session_with_retry(retries=3, backoff_factor=1, status_forcelist=(500
         backoff_factor=backoff_factor,
         status_forcelist=status_forcelist,
         allowed_methods=["HEAD", "GET", "POST", "PUT", "DELETE", "OPTIONS", "TRACE"],
+        raise_on_status=False,  # 不抛出异常，让我们可以检查响应
+        other=retries,  # 对其他类型的错误也重试
     )
     adapter = HTTPAdapter(max_retries=retry, pool_connections=10, pool_maxsize=20)
     session.mount("http://", adapter)
@@ -157,9 +159,9 @@ class LingyanFile:
         """
         self.api_key = api_key
 
-    def upload_file(self, file_path: str, file_type: str = "app") -> tuple[int, dict]:
+    def upload_file(self, file_path: str, file_type: str = "app", max_retries: int = 5) -> tuple[int, dict]:
         """
-        上传文件
+        上传文件（带重试机制）
         ----
         Args:
             file_path (str): 文件路径
@@ -169,6 +171,7 @@ class LingyanFile:
                 - tool: 工具
                 - chat: 聊天
                 - avatar: 头像
+            max_retries (int): 最大重试次数，默认5次
         """
         if file_type not in ["app", "dataset", "tool", "chat", "avatar"]:
             raise ValueError(
@@ -186,25 +189,56 @@ class LingyanFile:
             "content-type": "multipart/form-data; boundary=---011000010111000001101001",
         }
 
-        f = open(file_path, "rb")
-        encoder = MultipartEncoder(
-            fields={
-                "file": (os.path.basename(file_path), f, "application/pdf"),
-                "biz_type": file_type,
-            }
-        )
+        last_error = None
+        for attempt in range(max_retries + 1):
+            f = None
+            try:
+                f = open(file_path, "rb")
+                encoder = MultipartEncoder(
+                    fields={
+                        "file": (os.path.basename(file_path), f, "application/pdf"),
+                        "biz_type": file_type,
+                    }
+                )
+                
+                request_headers = {**headers, "Content-Type": encoder.content_type}  # 带 boundary
 
-        headers = {**headers, "Content-Type": encoder.content_type}  # 带 boundary
-
-        try:
-            session = get_session()
-            response = session.request("POST", url, data=encoder, headers=headers, timeout=DEFAULT_TIMEOUT)
-            f.close()
-            return response.status_code, response.json().get("data")
-        except requests.exceptions.RequestException as e:
-            f.close()
-            log.error(f"文件上传请求失败: {str(e)}")
-            return 500, f"请求失败: {str(e)}"
+                session = get_session()
+                # 文件上传使用更长的超时时间（5分钟），大文件需要更多时间
+                response = session.request("POST", url, data=encoder, headers=request_headers, timeout=300)
+                f.close()
+                return response.status_code, response.json().get("data")
+            except requests.exceptions.ReadTimeout as e:
+                # 读取超时：服务器处理时间过长，等待更长时间后重试
+                if f:
+                    f.close()
+                last_error = e
+                if attempt < max_retries:
+                    delay = 30 * (attempt + 1)  # 超时用更长等待: 30, 60, 90, 120, 150 秒
+                    log.warning(f"文件上传读取超时，服务器处理中，{delay}秒后重试 ({attempt + 1}/{max_retries}): {file_path}")
+                    time.sleep(delay)
+                else:
+                    log.error(f"文件上传超时，已达最大重试次数: {file_path} - {str(e)}")
+            except (requests.exceptions.ConnectionError, 
+                    requests.exceptions.Timeout,
+                    requests.exceptions.ChunkedEncodingError) as e:
+                if f:
+                    f.close()
+                last_error = e
+                if attempt < max_retries:
+                    delay = 2 * (2 ** attempt)  # 指数退避: 2, 4, 8, 16, 32 秒
+                    log.warning(f"文件上传连接错误，{delay}秒后重试 ({attempt + 1}/{max_retries}): {file_path} - {str(e)}")
+                    time.sleep(delay)
+                else:
+                    log.error(f"文件上传失败，已达最大重试次数: {file_path} - {str(e)}")
+            except requests.exceptions.RequestException as e:
+                if f:
+                    f.close()
+                log.error(f"文件上传请求失败: {str(e)}")
+                return 500, f"请求失败: {str(e)}"
+        
+        # 所有重试都失败了
+        return 500, f"请求失败（重试{max_retries}次后）: {str(last_error)}"
 
 
     def download_file(self, file_id: str) -> tuple[int, bytes]:
@@ -760,17 +794,17 @@ class LingyanDataset:
             log.info(f"获取文档列表成功，长度 {len(data)}，当前页码 {current_page}")
         return 200, documents
 
-    def delete_document(self, dataset_id: str, document_id: str, max_retries: int = 3) -> tuple[int, dict | str]:
+    def delete_document(self, dataset_id: str, document_id: str, max_retries: int = 5) -> tuple[int, dict | str]:
         """
-        删除文档
+        删除文档（带增强重试机制）
         
-        删除知识库中的指定文档，支持自动重试。
+        删除知识库中的指定文档，支持自动重试和指数退避。
         删除操作会同时删除文档的所有切片和索引数据。
         
         Args:
             dataset_id (str): 知识库ID
             document_id (str): 要删除的文档ID
-            max_retries (int): 最大重试次数，默认3次（每次重试间隔2秒）
+            max_retries (int): 最大重试次数，默认5次（指数退避）
             
         Returns:
             tuple[int, dict | str]: (状态码, 响应数据或错误信息)
@@ -778,26 +812,37 @@ class LingyanDataset:
                 - 500: 请求失败（网络错误等）
                 - 其他: API返回的错误
         """
-        import time
-        
         url = f"http://10.4.49.66:18080/api/v1/service/datasets/{dataset_id}/documents/{document_id}"
         
+        last_error = None
         for attempt in range(max_retries):
             try:
-                response = requests.delete(
+                # 使用带重试机制的session
+                session = get_session()
+                response = session.delete(
                     url,
                     headers={"accept": "application/json", "X-API-Key": self.api_key},
-                    timeout=60  # 60秒超时
+                    timeout=DEFAULT_TIMEOUT
                 )
                 if response.status_code != 200:
                     return response.status_code, response.json().get("msg")
                 return 200, response.json().get("data")
-            except requests.exceptions.RequestException as e:
-                log.warning(f"删除文档请求失败 (尝试 {attempt + 1}/{max_retries}): {str(e)}")
+            except (requests.exceptions.ConnectionError,
+                    requests.exceptions.Timeout,
+                    requests.exceptions.ChunkedEncodingError) as e:
+                last_error = e
                 if attempt < max_retries - 1:
-                    time.sleep(2)  # 等待2秒后重试
+                    delay = 3 * (2 ** attempt)  # 指数退避: 3, 6, 12, 24, 48 秒
+                    log.warning(f"删除文档连接错误，{delay}秒后重试 ({attempt + 1}/{max_retries}): {str(e)}")
+                    time.sleep(delay)
                 else:
-                    return 500, f"请求失败: {str(e)}"
+                    log.error(f"删除文档失败，已达最大重试次数: {str(e)}")
+            except requests.exceptions.RequestException as e:
+                log.error(f"删除文档请求失败: {str(e)}")
+                return 500, f"请求失败: {str(e)}"
+        
+        # 所有重试都失败了
+        return 500, f"请求失败（重试{max_retries}次后）: {str(last_error)}"
 
     def delete_documents_by_types(self, dataset_id: str, file_types: list[str] = None) -> tuple[int, int, list]:
         """
@@ -844,6 +889,8 @@ class LingyanDataset:
                 else:
                     failed_list.append({"name": doc_name, "id": doc_id, "type": doc_type, "error": del_result})
                     log.error(f"删除文档失败: {doc_name}, 错误: {del_result}")
+                # 每次删除后等待1秒，避免请求过快导致服务器拒绝连接
+                time.sleep(1)
 
         return 200, deleted_count, failed_list
 
