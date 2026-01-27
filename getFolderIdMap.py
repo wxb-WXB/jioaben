@@ -26,7 +26,7 @@ query = {
 }
 
 header = {
-    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzAwODAwODV9.6WZXAewztWtcozbGCu7LUViMNgBToo3gGdcGyV4EnMk",
+    "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzAxMDk1MzR9.813EJh-DIseyBX9BSLFJNTCniOXgfSPqJ_Nmbgjcuc0",
     "x-fly-tenantid": "00000000-0000-0000-0000-000000000000",
     "x-workspace-id": workspace_id,
 }
