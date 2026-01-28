@@ -43,7 +43,7 @@ LLM_CONFIG = {
     "completion_params": {
         "temperature": 0.2,
         "top_p": 0.75,
-        "max_tokens": 9200
+        "max_tokens": 12000
     }
 }
 

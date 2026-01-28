@@ -132,27 +132,30 @@ UPLOAD_TASKS = [
     #     "folder_id": "ca8036d3-ef54-49e2-b6be-8a9d9af98369",
     #     "dataset_name": "15土建C2施工文件",
     # },
-    #  {
-    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\16土建D1施工文件',
-    #     "folder_id": "9260f6d0-136d-4a28-9e22-ac8b1b2359df",
-    #     "dataset_name": "16土建D1施工文件",
-    # },
-    #  {
-    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\17土建D2施工文件',
-    #     "folder_id": "3440be43-94b7-4db7-bbc2-a8c1b57c1431",
-    #     "dataset_name": "17土建D2施工文件",
-    # },
-    # {
-    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\18土建D3施工文件',
-    #     "folder_id": "c5fc7625-82f2-45e2-a538-765b835e0755",
-    #     "dataset_name": "18土建D3施工文件",
-    # },
-    # # 已确认----已上传--个文件-成功上传
+    # 开始传
      {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\19土建D4施工文件',
-        "folder_id": "7b25720a-260c-42c4-8556-a9ffe1ef1c85",
-        "dataset_name": "19土建D4施工文件",
+        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\16土建D1施工文件',
+        "folder_id": "9260f6d0-136d-4a28-9e22-ac8b1b2359df",
+        "dataset_name": "16土建D1施工文件",
     },
+     # 开始传
+     {
+        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\17土建D2施工文件',
+        "folder_id": "3440be43-94b7-4db7-bbc2-a8c1b57c1431",
+        "dataset_name": "17土建D2施工文件",
+    },
+    # 开始传----上传中--个文件-23888-还没传完
+    {
+        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\18土建D3施工文件',
+        "folder_id": "c5fc7625-82f2-45e2-a538-765b835e0755",
+        "dataset_name": "18土建D3施工文件",
+    },
+    # # 已确认----已上传--个文件-还没传完-服务器压力大
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\19土建D4施工文件',
+    #     "folder_id": "7b25720a-260c-42c4-8556-a9ffe1ef1c85",
+    #     "dataset_name": "19土建D4施工文件",
+    # },
      # # 已确认----已上传--966个文件-成功上传 -------
     #  {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\20安全监测01标',
@@ -263,19 +266,34 @@ current_task = {
 }
 
 
-def get_all_files(folder_path):
+def get_all_files(folder_path, show_progress=False, task_name=""):
     """
     获取文件夹下所有文件（包括子文件夹）
+    
+    Args:
+        folder_path: 文件夹路径
+        show_progress: 是否显示扫描进度
+        task_name: 任务名称（用于进度显示）
     
     Returns:
         list: [(相对路径, 绝对路径), ...]
     """
     files = []
-    for root, _, filenames in os.walk(folder_path):
+    dir_count = 0
+    
+    for root, dirs, filenames in os.walk(folder_path):
+        dir_count += 1
+        if show_progress:
+            print(f"\r  [{task_name}] 扫描中... 已扫描 {dir_count} 个目录, 找到 {len(files)} 个文件", end="", flush=True)
+        
         for filename in filenames:
             abs_path = os.path.join(root, filename)
             rel_path = os.path.relpath(abs_path, folder_path)
             files.append((rel_path, abs_path))
+    
+    if show_progress:
+        print(f"\r  [{task_name}] 扫描完成: {dir_count} 个目录, {len(files)} 个文件" + " " * 20)
+    
     return files
 
 
@@ -599,8 +617,8 @@ def check_upload_status(valid_tasks):
         
         console_output(f"\n正在扫描任务 {i+1}/{len(valid_tasks)}: {dataset_name}...")
         
-        # 扫描文件
-        task_files = get_all_files(local_folder)
+        # 扫描文件（显示进度）
+        task_files = get_all_files(local_folder, show_progress=True, task_name=dataset_name)
         
         # 统计已上传和待上传
         uploaded_files = []
@@ -686,9 +704,9 @@ def do_upload(valid_tasks):
         log.info(f"  [{dataset_name}] 本地文件夹：{local_folder}")
         log.info(f"  [{dataset_name}] 远程目录ID：{folder_id}")
         
-        # 扫描该任务的文件
+        # 扫描该任务的文件（显示进度）
         log.info(f"  [{dataset_name}] 正在扫描文件...")
-        task_files = get_all_files(local_folder)
+        task_files = get_all_files(local_folder, show_progress=True, task_name=dataset_name)
         total_scanned = len(task_files)
         log.info(f"  [{dataset_name}] 扫描完成，共找到 {total_scanned} 个文件")
         

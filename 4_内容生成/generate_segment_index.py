@@ -281,7 +281,7 @@ def regenerate_segment_index(dataset_id, document_id, segment_id):
         return False, f"异常: {str(e)}"
 
 
-def process_document_segments(dataset_id, document_id, document_name):
+def process_document_segments(dataset_id, document_id, document_name, folder_path):
     """
     处理单个文档的所有分段
     """
@@ -301,6 +301,8 @@ def process_document_segments(dataset_id, document_id, document_name):
         total_fail = 0
         total_skip = 0
         
+        log.info(f"      文件夹: {folder_path}")
+        log.info(f"      文档: {document_name}")
         log.info(f"      共 {len(segments)} 个分段")
         
         for idx, segment in enumerate(segments, 1):
@@ -347,9 +349,9 @@ def process_document_segments(dataset_id, document_id, document_name):
                 status_info.append(f"问题:{question_status}")
             
             if status_info:
-                log.info(f"      [{idx}/{len(segments)}] 重新生成({', '.join(status_info)}): {segment_content}...")
+                log.info(f"      [{idx}/{len(segments)}] [{folder_path}] 重新生成({', '.join(status_info)}): {segment_content}...")
             else:
-                log.info(f"      [{idx}/{len(segments)}] 生成索引: {segment_content}...")
+                log.info(f"      [{idx}/{len(segments)}] [{folder_path}] 生成索引: {segment_content}...")
             
             # 生成索引
             for attempt in range(1, MAX_RETRIES + 1):
@@ -424,9 +426,9 @@ def scan_and_generate(workspace_id, workspace_name):
                 doc_id = doc.get("id")
                 doc_name = doc.get("name")
                 
-                log.info(f"    [{idx}/{len(success_docs)}] 文档: {doc_name}")
+                log.info(f"    [{idx}/{len(success_docs)}] 文档: [{folder_path}] {doc_name}")
                 
-                seg_success, seg_fail, msg = process_document_segments(dataset_id, doc_id, doc_name)
+                seg_success, seg_fail, msg = process_document_segments(dataset_id, doc_id, doc_name, folder_path)
                 total_success += seg_success
                 total_fail += seg_fail
                 

@@ -261,7 +261,7 @@ def start_single_task(dataset_id, doc_info):
     return False, "启动失败"
 
 
-def process_sliding_window(dataset_id, docs_to_process):
+def process_sliding_window(dataset_id, dataset_name, folder_path, docs_to_process):
     """
     滑动窗口模式处理文档：
     - 始终保持 CONCURRENT_TASKS 个任务在运行
@@ -283,6 +283,8 @@ def process_sliding_window(dataset_id, docs_to_process):
     
     log.info(f"  滑动窗口模式: 同时运行 {CONCURRENT_TASKS} 个任务")
     log.info(f"  总共需要处理: {total_docs} 个文档")
+    log.info(f"  当前知识库: {dataset_name}")
+    log.info(f"  文件夹路径: {folder_path}")
     log.info("-" * 50)
     
     while pending_docs or running_tasks:
@@ -300,11 +302,11 @@ def process_sliding_window(dataset_id, docs_to_process):
                     'start_time': time.time()
                 }
                 processed_count += 1
-                log.info(f"    [{processed_count}/{total_docs}] 已启动: {document_name[:50]}...")
+                log.info(f"    [{processed_count}/{total_docs}] 已启动: [{folder_path}] {document_name[:40]}...")
             else:
                 fail_count += 1
                 processed_count += 1
-                log.warning(f"    [{processed_count}/{total_docs}] 启动失败: {document_name[:50]}...")
+                log.warning(f"    [{processed_count}/{total_docs}] 启动失败: [{folder_path}] {document_name[:40]}...")
             
             time.sleep(REQUEST_INTERVAL)
         
@@ -323,7 +325,7 @@ def process_sliding_window(dataset_id, docs_to_process):
             # 检查超时
             if elapsed > MAX_WAIT_TIME:
                 timeout_ids.append(doc_id)
-                log.warning(f"      ⏱ 超时: {doc['document_name'][:50]}... ({int(elapsed)}秒)")
+                log.warning(f"      ⏱ 超时: [{folder_path}] {doc['document_name'][:40]}... ({int(elapsed)}秒)")
                 continue
             
             # 获取文档状态
@@ -337,10 +339,10 @@ def process_sliding_window(dataset_id, docs_to_process):
             
             if faq_status in ["completed", "success"]:
                 completed_ids.append((doc_id, True))
-                log.info(f"      ✓ 完成: {doc['document_name'][:50]}... ({int(elapsed)}秒)")
+                log.info(f"      ✓ 完成: [{folder_path}] {doc['document_name'][:40]}... ({int(elapsed)}秒)")
             elif faq_status in ["failed", "error"]:
                 completed_ids.append((doc_id, False))
-                log.warning(f"      ✗ 失败: {doc['document_name'][:50]}...")
+                log.warning(f"      ✗ 失败: [{folder_path}] {doc['document_name'][:40]}...")
         
         # 3. 处理已完成的任务
         for doc_id, is_success in completed_ids:
@@ -442,7 +444,7 @@ def scan_and_process(workspace_id, workspace_name):
             log.info(f"  需要启动FAQ: {len(docs_to_process)} 个")
             
             # 滑动窗口模式处理
-            success_count, fail_count = process_sliding_window(dataset_id, docs_to_process)
+            success_count, fail_count = process_sliding_window(dataset_id, dataset_name, folder_path, docs_to_process)
             
             total_success += success_count
             total_fail += fail_count

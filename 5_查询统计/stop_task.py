@@ -122,6 +122,9 @@ def main():
         dataset_name = ds.get("name")
         ws_name = ds.get("_workspace_name", "未知")
         
+        # 显示扫描进度
+        print(f"\r扫描进度: [{i+1}/{len(all_datasets)}] {dataset_name[:30]:<30}", end="", flush=True)
+        
         try:
             status, documents = dataset.list_documents(dataset_id)
             if status != 200:
@@ -140,6 +143,7 @@ def main():
                 running_task = get_running_tasks(doc)
                 if running_task:
                     task_id, task_status = running_task
+                    print()  # 换行，避免覆盖进度
                     print(f"[{ws_name}] [{dataset_name}] 发现进行中任务:")
                     print(f"  文档: {doc_name}")
                     print(f"  状态: {task_status}")
