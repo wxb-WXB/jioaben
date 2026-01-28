@@ -62,121 +62,130 @@ log = logging.getLogger("autoUploadsToFolder")
 # - folder_id: 远程目录ID（从 folder.db 或平台获取）
 # - dataset_name: 知识库名称（如果不存在会自动创建）
 UPLOAD_TASKS = [
-    {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\02先行段施工施工文件',
-        "folder_id": "75fd2157-9386-4594-91fc-b20f3ecf45d1",
-        "dataset_name": "02先行段施工施工文件",
-    },
-    {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\03土建A1施工文件',
-        "folder_id": "eb7d5b3b-a8ef-4622-9cfb-e32239e299ec",
-        "dataset_name": "03土建A1施工文件",
-    },
-    {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\04土建A2施工文件',
-        "folder_id": "a0f17c82-8442-4e0e-8b44-06a687383c83",
-        "dataset_name": "04土建A2施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\05土建A3施工文件',
-        "folder_id": "2bfa4cd1-0f28-4077-82d8-85f611efa92a",
-        "dataset_name": "05土建A3施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\06土建A4施工文件',
-        "folder_id": "7c122d22-37cf-4efc-a556-63b64ce21a04",
-        "dataset_name": "06土建A4施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\07土建A5施工文件',
-        "folder_id": "f7ca95e3-69c2-4efb-a2a9-80cb3a9d5a26",
-        "dataset_name": "07土建A5施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\08土建A6施工文件',
-        "folder_id": "d9439792-b847-4466-923b-2c5b46f2847b",
-        "dataset_name": "08土建A6施工文件",
-    },
-    {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\09土建A7施工文件',
-        "folder_id": "3a4523b1-c495-432a-b0dd-feeb60bc9600",
-        "dataset_name": "09土建A7施工文件",
-    },
-    {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\10土建B1施工文件',
-        "folder_id": "f4b75b0f-f53c-41c6-9471-0fbc5015c9fa",
-        "dataset_name": "10土建B1施工文件",
-    },
-    {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\12土建B3施工文件',
-        "folder_id": "b85d37f0-6a79-4948-984c-e4f92716bbcb",
-        "dataset_name": "12土建B3施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\13土建B4施工文件',
-        "folder_id": "a832949d-6946-40fc-b326-a5d94504e218",
-        "dataset_name": "13土建B4施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\14土建C1施工文件',
-        "folder_id": "f7a3d711-f03f-46c3-bbd2-72c7c8d10197",
-        "dataset_name": "14土建C1施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\15土建C2施工文件',
-        "folder_id": "ca8036d3-ef54-49e2-b6be-8a9d9af98369",
-        "dataset_name": "15土建C2施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\16土建D1施工文件',
-        "folder_id": "9260f6d0-136d-4a28-9e22-ac8b1b2359df",
-        "dataset_name": "16土建D1施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\17土建D2施工文件',
-        "folder_id": "3440be43-94b7-4db7-bbc2-a8c1b57c1431",
-        "dataset_name": "17土建D2施工文件",
-    },
-    {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\18土建D3施工文件',
-        "folder_id": "c5fc7625-82f2-45e2-a538-765b835e0755",
-        "dataset_name": "18土建D3施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\19土建D4施工文件',
-        "folder_id": "7b25720a-260c-42c4-8556-a9ffe1ef1c85",
-        "dataset_name": "19土建D4施工文件",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\20安全监测01标',
-        "folder_id": "3979fc59-2256-40cf-882b-a284588fc659",
-        "dataset_name": "20安全监测01标",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\21安全监测02标',
-        "folder_id": "6331f863-f6f4-4535-b281-e7c763e60ebb",
-        "dataset_name": "21安全监测02标",
-    },
+    # {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\02先行段施工施工文件',
+    #     "folder_id": "75fd2157-9386-4594-91fc-b20f3ecf45d1",
+    #     "dataset_name": "02先行段施工施工文件",
+    # },
+    # {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\03土建A1施工文件',
+    #     "folder_id": "eb7d5b3b-a8ef-4622-9cfb-e32239e299ec",
+    #     "dataset_name": "03土建A1施工文件",
+    # },
+    # {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\04土建A2施工文件',
+    #     "folder_id": "a0f17c82-8442-4e0e-8b44-06a687383c83",
+    #     "dataset_name": "04土建A2施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\05土建A3施工文件',
+    #     "folder_id": "2bfa4cd1-0f28-4077-82d8-85f611efa92a",
+    #     "dataset_name": "05土建A3施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\06土建A4施工文件',
+    #     "folder_id": "7c122d22-37cf-4efc-a556-63b64ce21a04",
+    #     "dataset_name": "06土建A4施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\07土建A5施工文件',
+    #     "folder_id": "f7ca95e3-69c2-4efb-a2a9-80cb3a9d5a26",
+    #     "dataset_name": "07土建A5施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\08土建A6施工文件',
+    #     "folder_id": "d9439792-b847-4466-923b-2c5b46f2847b",
+    #     "dataset_name": "08土建A6施工文件",
+    # },
+    # {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\09土建A7施工文件',
+    #     "folder_id": "3a4523b1-c495-432a-b0dd-feeb60bc9600",
+    #     "dataset_name": "09土建A7施工文件",
+    # },
+    # {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\10土建B1施工文件',
+    #     "folder_id": "f4b75b0f-f53c-41c6-9471-0fbc5015c9fa",
+    #     "dataset_name": "10土建B1施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\11土建B2施工文件',
+    #     "folder_id": "92ef6fbe-815e-4e1d-8cc8-20ae62bd2700",
+    #     "dataset_name": "11土建B2施工文件",
+    # },
+    # {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\12土建B3施工文件',
+    #     "folder_id": "b85d37f0-6a79-4948-984c-e4f92716bbcb",
+    #     "dataset_name": "12土建B3施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\13土建B4施工文件',
+    #     "folder_id": "a832949d-6946-40fc-b326-a5d94504e218",
+    #     "dataset_name": "13土建B4施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\14土建C1施工文件',
+    #     "folder_id": "f7a3d711-f03f-46c3-bbd2-72c7c8d10197",
+    #     "dataset_name": "14土建C1施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\15土建C2施工文件',
+    #     "folder_id": "ca8036d3-ef54-49e2-b6be-8a9d9af98369",
+    #     "dataset_name": "15土建C2施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\16土建D1施工文件',
+    #     "folder_id": "9260f6d0-136d-4a28-9e22-ac8b1b2359df",
+    #     "dataset_name": "16土建D1施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\17土建D2施工文件',
+    #     "folder_id": "3440be43-94b7-4db7-bbc2-a8c1b57c1431",
+    #     "dataset_name": "17土建D2施工文件",
+    # },
+    # {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\18土建D3施工文件',
+    #     "folder_id": "c5fc7625-82f2-45e2-a538-765b835e0755",
+    #     "dataset_name": "18土建D3施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\19土建D4施工文件',
+    #     "folder_id": "7b25720a-260c-42c4-8556-a9ffe1ef1c85",
+    #     "dataset_name": "19土建D4施工文件",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\20安全监测01标',
+    #     "folder_id": "3979fc59-2256-40cf-882b-a284588fc659",
+    #     "dataset_name": "20安全监测01标",
+    # },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\21安全监测02标',
+    #     "folder_id": "6331f863-f6f4-4535-b281-e7c763e60ebb",
+    #     "dataset_name": "21安全监测02标",
+    # },
+    # 已确认----待传--891个文件
       {
         "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\22安全监测03标',
         "folder_id": "ddae4a90-dc50-4310-940d-50465739bddb",
         "dataset_name": "22安全监测03标",
     },
-    {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\23安全监测04标',
-        "folder_id": "b5c18d5d-1df0-4120-a7fd-f1225668cd87",
-        "dataset_name": "23安全监测04标",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\26临时用电施工项目',
-        "folder_id": "c80561a7-7a91-4564-81f9-16037e988557",
-        "dataset_name": "26临时用电施工项目",
-    },
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\27穿铁项目',
-        "folder_id": "b00baecd-d3a4-4f7a-87c6-e404bc7d1130",
-        "dataset_name": "27穿铁项目",
-    },
+    # 已确认----已上传--1401个文件-成功上传 1359
+    # {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\23安全监测04标',
+    #     "folder_id": "b5c18d5d-1df0-4120-a7fd-f1225668cd87",
+    #     "dataset_name": "23安全监测04标",
+    # },
+    # 已确认----已传完--99个文件
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\26临时用电施工项目',
+    #     "folder_id": "c80561a7-7a91-4564-81f9-16037e988557",
+    #     "dataset_name": "26临时用电施工项目",
+    # },
+    # 已确认----已传完--26个文件
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\27穿铁项目',
+    #     "folder_id": "b00baecd-d3a4-4f7a-87c6-e404bc7d1130",
+    #     "dataset_name": "27穿铁项目",
+    # },
      
 ]
 
@@ -185,8 +194,16 @@ workspace_id = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"
 api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
 # ==================================
 
+# ============ 运行模式 ============
+# "check"  - 只检查上传情况，不上传
+# "upload" - 直接上传（跳过已上传的文件）
+# "both"   - 先检查，确认后再上传
+RUN_MODE = "upload"
+# ==================================
+
 # ============ 性能配置 ============
-MAX_WORKERS = 5               # 并发线程数
+MAX_WORKERS = 10              # 每个任务的并发线程数
+MAX_CONCURRENT_TASKS = 3      # 同时处理的任务数（几个文件夹同时上传）
 SKIP_IMAGE_CHECK = True       # 是否跳过PDF图片检测
 REQUEST_INTERVAL = 0.3        # 请求间隔时间（秒）
 # ==================================
@@ -533,9 +550,208 @@ def process_file_safe(file_info):
             stats['error_count'] += 1
 
 
+def check_upload_status(valid_tasks):
+    """
+    检查所有任务的上传情况，并保存到文件
+    
+    控制台只显示摘要，详细文件列表保存到文件
+    
+    Returns:
+        list: 每个任务的统计信息 [(dataset_name, total, uploaded, pending), ...]
+        int: 总待上传文件数
+    """
+    # 检查报告文件路径
+    report_filename = os.path.join(logs_dir, f"upload_check_{datetime.now().strftime('%Y-%m-%d_%H%M%S')}.txt")
+    
+    # 详细报告只写入文件
+    report_lines = []
+    
+    def file_output(line=""):
+        """只写入文件"""
+        report_lines.append(line)
+    
+    def console_output(line=""):
+        """只打印到控制台"""
+        print(line)
+    
+    def both_output(line=""):
+        """同时打印和写入文件"""
+        print(line)
+        report_lines.append(line)
+    
+    both_output("=" * 60)
+    both_output("📊 上传情况检查")
+    both_output(f"检查时间：{datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+    both_output("=" * 60)
+    
+    all_stats = []
+    total_pending = 0
+    total_uploaded = 0
+    total_files = 0
+    
+    for i, task in enumerate(valid_tasks):
+        local_folder = task["local_folder"]
+        dataset_name = task["dataset_name"]
+        folder_id = task["folder_id"]
+        
+        console_output(f"\n正在扫描任务 {i+1}/{len(valid_tasks)}: {dataset_name}...")
+        
+        # 扫描文件
+        task_files = get_all_files(local_folder)
+        
+        # 统计已上传和待上传
+        uploaded_files = []
+        pending_files = []
+        for rel_path, abs_path in task_files:
+            if success_manager.is_uploaded(abs_path):
+                uploaded_files.append(rel_path)
+            else:
+                pending_files.append(rel_path)
+        
+        total_count = len(task_files)
+        uploaded_count = len(uploaded_files)
+        pending_count = len(pending_files)
+        
+        all_stats.append((dataset_name, total_count, uploaded_count, pending_count))
+        
+        total_files += total_count
+        total_uploaded += uploaded_count
+        total_pending += pending_count
+        
+        # 计算进度百分比
+        progress = (uploaded_count / total_count * 100) if total_count > 0 else 100
+        status_icon = "✅" if pending_count == 0 else "🔄"
+        
+        # 控制台只显示摘要
+        both_output(f"{status_icon} 任务 {i+1}: {dataset_name}")
+        both_output(f"   总文件: {total_count} | 已上传: {uploaded_count} | 待上传: {pending_count} | 进度: {progress:.1f}%")
+        
+        # 详细信息只写入文件
+        file_output(f"   本地路径: {local_folder}")
+        file_output(f"   远程目录ID: {folder_id}")
+        
+        # 列出待上传的文件（只写入文件）
+        if pending_files:
+            file_output(f"   -------- 待上传文件列表 ({pending_count}个) --------")
+            for idx, f in enumerate(pending_files, 1):
+                file_output(f"   [{idx}] {f}")
+        
+        # 列出已上传的文件（只写入文件）
+        if uploaded_files:
+            file_output(f"   -------- 已上传文件列表 ({uploaded_count}个) --------")
+            for idx, f in enumerate(uploaded_files, 1):
+                file_output(f"   [{idx}] {f}")
+        
+        file_output("")  # 空行分隔
+    
+    # 总结
+    both_output("\n" + "=" * 60)
+    total_progress = (total_uploaded / total_files * 100) if total_files > 0 else 100
+    both_output(f"📈 总计统计")
+    both_output(f"   总文件数: {total_files}")
+    both_output(f"   已上传: {total_uploaded}")
+    both_output(f"   待上传: {total_pending}")
+    both_output(f"   总进度: {total_progress:.1f}%")
+    both_output("=" * 60)
+    
+    # 保存到文件
+    with open(report_filename, 'w', encoding='utf-8') as f:
+        f.write('\n'.join(report_lines))
+    
+    console_output(f"\n📄 详细报告已保存到: {report_filename}")
+    
+    return all_stats, total_pending
+
+
+def do_upload(valid_tasks):
+    """执行上传任务"""
+    print("\n" + "=" * 60)
+    log.info(f"共有 {len(valid_tasks)} 个上传任务")
+    log.info(f"同时处理任务数：{MAX_CONCURRENT_TASKS}")
+    log.info(f"每任务并发线程数：{MAX_WORKERS}")
+    log.info(f"已加载 {success_manager.get_count()} 条成功记录")
+    print("=" * 60)
+    
+    def process_single_task(task_info):
+        """处理单个任务（扫描 + 上传）"""
+        task_index, task = task_info
+        local_folder = task["local_folder"]
+        folder_id = task["folder_id"]
+        dataset_name = task["dataset_name"]
+        
+        log.info(f"【任务 {task_index}/{len(valid_tasks)}】开始处理")
+        log.info(f"  [{dataset_name}] 本地文件夹：{local_folder}")
+        log.info(f"  [{dataset_name}] 远程目录ID：{folder_id}")
+        
+        # 扫描该任务的文件
+        log.info(f"  [{dataset_name}] 正在扫描文件...")
+        task_files = get_all_files(local_folder)
+        total_scanned = len(task_files)
+        log.info(f"  [{dataset_name}] 扫描完成，共找到 {total_scanned} 个文件")
+        
+        if not task_files:
+            log.warning(f"  [{dataset_name}] 该任务没有文件，跳过")
+            return
+        
+        # 过滤已上传的文件
+        already_uploaded = []
+        pending_files = []
+        for rel_path, abs_path in task_files:
+            if success_manager.is_uploaded(abs_path):
+                already_uploaded.append(rel_path)
+            else:
+                pending_files.append((rel_path, abs_path))
+        
+        # 记录所有文件名到日志
+        log.info(f"  [{dataset_name}] -------- 文件列表开始 --------")
+        for idx, (rel_path, _) in enumerate(task_files, 1):
+            status = "[已上传]" if rel_path in already_uploaded else "[待上传]"
+            log.info(f"  [{dataset_name}] [{idx}] {status} {rel_path}")
+        log.info(f"  [{dataset_name}] -------- 文件列表结束 --------")
+        log.info(f"  [{dataset_name}] 统计：总共 {total_scanned} 个，已上传 {len(already_uploaded)} 个，待上传 {len(pending_files)} 个")
+        
+        # 如果全部已上传，跳过该任务
+        if not pending_files:
+            log.info(f"  [{dataset_name}] 所有文件均已上传，跳过该任务")
+            return
+        
+        # 构建文件信息列表
+        files_with_info = [(rel_path, abs_path, folder_id, dataset_name) 
+                          for rel_path, abs_path in pending_files]
+        
+        # 开始上传该任务
+        log.info(f"  [{dataset_name}] 开始上传 {len(pending_files)} 个文件...")
+        with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
+            list(executor.map(process_file_safe, files_with_info))
+        
+        # 每个任务完成后保存记录
+        success_manager.flush()
+        
+        log.info(f"【任务 {task_index}/{len(valid_tasks)}】[{dataset_name}] 完成")
+    
+    # 使用线程池并发处理多个任务
+    task_infos = [(i+1, task) for i, task in enumerate(valid_tasks)]
+    
+    with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_TASKS) as task_executor:
+        list(task_executor.map(process_single_task, task_infos))
+    
+    # 输出总统计
+    print("\n" + "=" * 60)
+    log.info("全部任务完成！总统计信息：")
+    log.info(f"  总文件数：{stats['total_files']}")
+    log.info(f"  成功上传：{stats['success_count']}")
+    log.info(f"  跳过文件：{stats['skip_count']}")
+    log.info(f"  失败文件：{stats['error_count']}")
+    
+    if stats['error_count'] > 0:
+        failed_manager.print_summary()
+        log.info(f"失败记录已保存到：{failed_manager.records_dir}")
+
+
 def main():
     print("=" * 60)
     print("指定目录上传工具（支持批量任务）")
+    print(f"运行模式：{RUN_MODE}")
     print("=" * 60)
     
     # 检查配置
@@ -564,73 +780,30 @@ def main():
         log.error("没有有效的上传任务！")
         return
     
-    # 显示任务列表
-    print("\n" + "=" * 60)
-    log.info(f"共有 {len(valid_tasks)} 个上传任务：")
-    print("-" * 60)
+    log.info(f"共有 {len(valid_tasks)} 个有效任务")
     
-    all_files = []  # 收集所有文件: (rel_path, abs_path, folder_id, dataset_name)
-    
-    for i, task in enumerate(valid_tasks):
-        local_folder = task["local_folder"]
-        folder_id = task["folder_id"]
-        dataset_name = task["dataset_name"]
+    # 根据运行模式执行
+    if RUN_MODE == "check":
+        # 只检查，不上传
+        check_upload_status(valid_tasks)
         
-        # 扫描该任务的文件
-        task_files = get_all_files(local_folder)
+    elif RUN_MODE == "upload":
+        # 直接上传
+        do_upload(valid_tasks)
         
-        log.info(f"\n任务 {i+1}:")
-        log.info(f"  本地文件夹：{local_folder}")
-        log.info(f"  远程目录ID：{folder_id}")
-        log.info(f"  知识库名称：{dataset_name}")
-        log.info(f"  文件数量：{len(task_files)}")
+    elif RUN_MODE == "both":
+        # 先检查，然后直接上传
+        all_stats, total_pending = check_upload_status(valid_tasks)
         
-        # 添加到总文件列表，附带任务信息
-        for rel_path, abs_path in task_files:
-            all_files.append((rel_path, abs_path, folder_id, dataset_name))
+        if total_pending == 0:
+            print("\n✅ 所有文件均已上传完成，无需操作！")
+            return
+        
+        print(f"\n有 {total_pending} 个文件待上传，开始上传...")
+        do_upload(valid_tasks)
     
-    log.info(f"\n总计：{len(all_files)} 个文件")
-    
-    if not all_files:
-        log.warning("没有找到任何文件，退出")
-        return
-    
-    # 显示文件列表预览
-    print("\n" + "-" * 60)
-    log.info("文件列表预览（前15个）：")
-    for rel_path, _, _, dataset_name in all_files[:15]:
-        log.info(f"  [{dataset_name}] {rel_path}")
-    if len(all_files) > 15:
-        log.info(f"  ... 还有 {len(all_files) - 15} 个文件")
-    
-    # 确认上传
-    print("\n" + "=" * 60)
-    confirm = input("确认开始上传？(y/n): ").strip().lower()
-    if confirm != 'y':
-        log.info("用户取消上传")
-        return
-    
-    # 开始上传
-    log.info(f"\n开始上传，线程数：{MAX_WORKERS}")
-    log.info(f"已加载 {success_manager.get_count()} 条成功记录")
-    
-    with ThreadPoolExecutor(max_workers=MAX_WORKERS) as executor:
-        list(executor.map(process_file_safe, all_files))
-    
-    # 保存记录
-    success_manager.flush()
-    
-    # 输出统计
-    print("\n" + "=" * 60)
-    log.info("上传完成！统计信息：")
-    log.info(f"  总文件数：{stats['total_files']}")
-    log.info(f"  成功上传：{stats['success_count']}")
-    log.info(f"  跳过文件：{stats['skip_count']}")
-    log.info(f"  失败文件：{stats['error_count']}")
-    
-    if stats['error_count'] > 0:
-        failed_manager.print_summary()
-        log.info(f"失败记录已保存到：{failed_manager.records_dir}")
+    else:
+        log.error(f"未知的运行模式：{RUN_MODE}，请设置为 check/upload/both")
 
 
 if __name__ == "__main__":
