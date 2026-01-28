@@ -37,13 +37,13 @@ WORKSPACE_NAME = "环北工程知识库"
 # LLM 配置
 LLM_CONFIG = {
     "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-    "name": "qwen-turbo",
+    "name": "deepseekv3-0324",
     "mode": "chat",
     "size": 32768,
     "completion_params": {
         "temperature": 0.2,
         "top_p": 0.75,
-        "max_tokens": 512
+        "max_tokens": 9200
     }
 }
 

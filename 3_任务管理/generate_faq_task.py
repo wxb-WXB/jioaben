@@ -29,7 +29,7 @@ from models import FolderMap
 
 # API 配置
 API_KEY = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3Njk5OTgzODl9.KTzYjw_Q7AvxEkVo56TYghHZT_aCgP7op4TGLotZz8M"
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzAxNzE0NTR9.WrKRQc501Uly3T-c_9V2HwYbyCg40DYyhfr_m_qzv7w"
 
 # 工作空间配置
 WORKSPACE_ID = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"
@@ -38,7 +38,7 @@ WORKSPACE_NAME = "环北工程知识库"
 # 处理配置
 CONCURRENT_TASKS = 5    # 同时运行的任务数量（滑动窗口大小）
 CHECK_INTERVAL = 5        # 检查任务状态的间隔（秒）
-MAX_WAIT_TIME = 600       # 单个任务最大等待时间（秒），超时则跳过
+MAX_WAIT_TIME = 2400       # 单个任务最大等待时间（秒），超时则跳过
 REQUEST_INTERVAL = 0.5    # 启动任务时每个请求之间的间隔（秒）
 MAX_RETRIES = 3           # 单个文档最大重试次数
 RETRY_INTERVAL = 5        # 重试间隔（秒）

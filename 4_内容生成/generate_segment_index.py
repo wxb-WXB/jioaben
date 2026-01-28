@@ -29,7 +29,7 @@ from models import FolderMap
 
 # API 配置
 API_KEY = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3Njk2Njg3NTd9.QIA7366n3_hYMv0R9rtVIg_pudMvdIGuDGrw-8clAtE"
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzAxNzE0NTR9.WrKRQc501Uly3T-c_9V2HwYbyCg40DYyhfr_m_qzv7w"
 
 # 工作空间配置
 WORKSPACE_ID = "9c6857a6-f87b-4db8-8978-2f2e117f05a0"
@@ -39,35 +39,35 @@ WORKSPACE_NAME = "环北工程知识库"
 GENERATE_CONFIG = {
     "title": {
         "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-        "name": "qwen-turbo",
-        "mode": "chat",
+        "name": "chat",
+        "mode": "deepseekv3-0324",
         "size": 32768,
         "completion_params": {
-            "temperature": 0.7,
-            "top_p": 1,
-            "max_tokens": 512
+           "temperature": 0.2,
+            "top_p": 0.75,
+            "max_tokens": 3200
         }
     },
     "summary": {
         "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-        "name": "qwen-turbo",
+        "name": "deepseekv3-0324",
         "mode": "chat",
         "size": 32768,
         "completion_params": {
-            "temperature": 0.7,
-            "top_p": 1,
-            "max_tokens": 512
+            "temperature": 0.2,
+            "top_p": 0.75,
+            "max_tokens": 3200
         }
     },
     "question": {
         "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-        "name": "qwen-turbo",
+        "name": "deepseekv3-0324",
         "mode": "chat",
         "size": 32768,
         "completion_params": {
-            "temperature": 0.7,
-            "top_p": 1,
-            "max_tokens": 512
+            "temperature": 0.2,
+            "top_p": 0.75,
+            "max_tokens": 3200
         }
     }
 }
