@@ -132,22 +132,19 @@ def get_size_range_label(size_mb):
 def get_file_type_priority(doc_name):
     """
     获取文件类型优先级（数字越小优先级越高）
-    Word 优先，PDF 其次，其他最后
+    文本文件（非PDF）优先，PDF最后处理
     """
     if not doc_name:
         return 99
     
     name_lower = doc_name.lower()
     
-    # Word 文件优先级最高
-    if name_lower.endswith(('.doc', '.docx')):
-        return 1
-    # PDF 其次
-    elif name_lower.endswith('.pdf'):
+    # PDF 最后处理
+    if name_lower.endswith('.pdf'):
         return 2
-    # 其他文件
+    # 其他文本文件优先
     else:
-        return 3
+        return 1
 
 
 def get_doc_status(doc):
@@ -214,8 +211,8 @@ def start_vector_task(lingyan_dataset, dataset_id, document_id, doc_name, size_m
         response_code, response = lingyan_dataset.create_task(
             dataset_id=dataset_id,
             document_id=document_id,
-            parse_enhance=True,  # 精准解析
-            image_task=False,    # 默认不开启图片索引
+            parse_enhance=False,  # 关闭精准解析
+            image_task=False,     # 默认不开启图片索引
         )
         
         if response_code == 200:
@@ -247,10 +244,10 @@ def process_all_docs_with_pool(lingyan_dataset, all_docs, all_datasets):
     log.info(f"保持 {MAX_RUNNING_TASKS} 个任务同时运行")
     log.info(f"{'='*60}")
     
-    # 排序：先按大小区间，再按文件类型（Word优先，PDF其次），再按文件大小
+    # 排序：先按文件类型（文本优先，PDF最后），再按大小区间，再按文件大小
     all_docs.sort(key=lambda x: (
-        SIZE_RANGES.index(next((r for r in SIZE_RANGES if r[2] == x['size_label']), SIZE_RANGES[0])),
         get_file_type_priority(x['doc_name']),
+        SIZE_RANGES.index(next((r for r in SIZE_RANGES if r[2] == x['size_label']), SIZE_RANGES[0])),
         x['size_mb']
     ))
     

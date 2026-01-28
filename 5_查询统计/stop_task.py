@@ -28,6 +28,9 @@ workspace_ids = [
 # 只停止指定文件夹下的任务（设为 None 则停止所有）
 TARGET_FOLDER = None
 
+# 只停止PDF类型的任务
+ONLY_STOP_PDF = False
+
 
 def stop_task(dataset_id: str, document_id: str, task_id: str) -> tuple[int, dict | str]:
     """
@@ -127,6 +130,11 @@ def main():
             for doc in documents:
                 doc_id = doc.get("id")
                 doc_name = doc.get("name", "未知")
+                
+                # 只停止PDF类型
+                if ONLY_STOP_PDF:
+                    if not doc_name.lower().endswith('.pdf'):
+                        continue
                 
                 # 检查是否有正在运行的任务
                 running_task = get_running_tasks(doc)
