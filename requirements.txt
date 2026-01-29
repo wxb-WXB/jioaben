@@ -1,0 +1,15 @@
+# 灵燕AI知识库自动化工具 - Python依赖
+
+# HTTP请求
+requests>=2.28.0
+requests-toolbelt>=0.10.0
+urllib3>=1.26.0
+
+# 数据库ORM
+peewee>=3.16.0
+
+# PDF处理（可选，用于图片检测）
+PyMuPDF>=1.23.0
+
+# 日期时间处理
+python-dateutil>=2.8.0
