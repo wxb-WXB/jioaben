@@ -14,6 +14,7 @@
 import json
 import sys
 import os
+from datetime import datetime
 
 # 添加项目根目录和核心模块目录到 Python 路径
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -23,6 +24,16 @@ sys.path.insert(0, os.path.join(project_root, "1_核心模块"))
 
 from LingyanAi import LingyanDataset
 from models import FolderMap
+
+# 确保logs文件夹存在
+logs_dir = os.path.join(project_root, "logs")
+if not os.path.exists(logs_dir):
+    os.makedirs(logs_dir)
+
+# 记录开始时间
+start_time = datetime.now()
+print(f"开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+print("=" * 60)
 
 api_key = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
 
@@ -261,3 +272,63 @@ print(f"  {ws2_name}  {ws2_total:>8}  {ws2_success:>8}  {ws2_indexing:>8}  {ws2_
 print(f"  {'-'*75}")
 print(f"  【总计】          {total_docs:>8}  {total_success:>8}  {total_indexing:>8}  {total_error:>8}  {total_cancelled:>8}  {total_no_task:>8}")
 print(f"")
+
+# 计算耗时
+end_time = datetime.now()
+duration = end_time - start_time
+duration_str = str(duration).split('.')[0]  # 去掉微秒
+
+print(f"{'='*60}")
+print(f"统计时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')} ~ {end_time.strftime('%H:%M:%S')}")
+print(f"总耗时: {duration_str}")
+print(f"{'='*60}")
+
+# ============================================================
+# 保存统计结果到日志文件
+# ============================================================
+log_filename = os.path.join(logs_dir, f"vector_stats_{start_time.strftime('%Y-%m-%d_%H%M%S')}.log")
+
+log_lines = []
+log_lines.append("=" * 60)
+log_lines.append(f"向量化统计报告")
+log_lines.append(f"统计时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')} ~ {end_time.strftime('%H:%M:%S')}")
+log_lines.append(f"总耗时: {duration_str}")
+log_lines.append("=" * 60)
+log_lines.append("")
+log_lines.append(f"总知识库数: {len(datasets)}")
+log_lines.append(f"总文档数: {total_docs}")
+log_lines.append("")
+log_lines.append("【汇总统计】")
+log_lines.append(f"  工作空间            总数      成功    进行中      失败    已取消    无任务")
+log_lines.append(f"  {'-'*75}")
+log_lines.append(f"  {ws1_name}      {ws1_total:>8}  {ws1_success:>8}  {ws1_indexing:>8}  {ws1_error:>8}  {ws1_cancelled:>8}  {ws1_no_task:>8}")
+log_lines.append(f"  {ws2_name}  {ws2_total:>8}  {ws2_success:>8}  {ws2_indexing:>8}  {ws2_error:>8}  {ws2_cancelled:>8}  {ws2_no_task:>8}")
+log_lines.append(f"  {'-'*75}")
+log_lines.append(f"  【总计】          {total_docs:>8}  {total_success:>8}  {total_indexing:>8}  {total_error:>8}  {total_cancelled:>8}  {total_no_task:>8}")
+log_lines.append("")
+
+# 各状态数量
+log_lines.append("【各状态文档数量】")
+for s, count in sorted(status_count.items(), key=lambda x: -x[1]):
+    log_lines.append(f"  {s}: {count}")
+log_lines.append("")
+
+# 正在向量化的文档详情
+if indexing_docs:
+    log_lines.append(f"【正在向量化的文档】(共 {len(indexing_docs)} 个)")
+    for doc in indexing_docs:
+        log_lines.append(f"  [{doc['workspace']}] [{doc['folder_path']}] [{doc['dataset_name']}] {doc['doc_name']} ({doc['status']})")
+    log_lines.append("")
+
+# 失败的文档详情
+if error_docs:
+    log_lines.append(f"【向量化失败的文档】(共 {len(error_docs)} 个)")
+    for doc in error_docs:
+        log_lines.append(f"  [{doc['workspace']}] [{doc['folder_path']}] [{doc['dataset_name']}] {doc['doc_name']}")
+    log_lines.append("")
+
+# 写入日志文件
+with open(log_filename, 'w', encoding='utf-8') as f:
+    f.write('\n'.join(log_lines))
+
+print(f"\n📄 统计报告已保存到: {log_filename}")

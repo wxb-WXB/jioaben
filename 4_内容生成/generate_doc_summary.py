@@ -43,7 +43,7 @@ LLM_CONFIG = {
     "completion_params": {
         "temperature": 0.2,
         "top_p": 0.75,
-        "max_tokens": 12000
+        "max_tokens": 8000
     }
 }
 
@@ -117,10 +117,32 @@ def check_doc_has_summary(doc):
     return summary is not None and len(str(summary).strip()) > 0
 
 
+# 不可重试的错误关键词（遇到这些错误直接跳过，不重试）
+SKIP_ERROR_KEYWORDS = [
+    "上下文",
+    "context",
+    "token",
+    "exceed",
+    "too long",
+    "maximum",
+    "limit",
+]
+
+
+def is_skip_error(error_msg):
+    """检查错误是否应该跳过（不重试）"""
+    error_lower = error_msg.lower()
+    for keyword in SKIP_ERROR_KEYWORDS:
+        if keyword.lower() in error_lower:
+            return True
+    return False
+
+
 def generate_summary(dataset_id, document_id, document_name):
     """
     调用 API 生成文档摘要
-    返回: (success: bool, message: str, summary: str)
+    返回: (success: bool, message: str, summary: str, should_skip: bool)
+    should_skip=True 表示遇到不可恢复的错误，不应重试
     """
     url = f"http://10.4.49.66:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}/generate-doc-summary"
     
@@ -158,25 +180,31 @@ def generate_summary(dataset_id, document_id, document_name):
             if result.get("code") == 200:
                 summary = result.get("data", {}).get("summary", "")
                 if summary:
-                    return True, f"摘要生成成功", summary
+                    return True, f"摘要生成成功", summary, False
                 else:
-                    return False, "生成的摘要为空", ""
+                    return False, "生成的摘要为空", "", False
             else:
-                return False, f"API返回错误: code={result.get('code')}, msg={result.get('msg')}", ""
+                error_msg = result.get('msg', '')
+                should_skip = is_skip_error(error_msg)
+                return False, f"API返回错误: code={result.get('code')}, msg={error_msg}", "", should_skip
         else:
             # 尝试获取错误详情
             try:
                 error_detail = response.json()
-                return False, f"HTTP {response.status_code}: {error_detail}", ""
+                error_msg = str(error_detail)
+                should_skip = is_skip_error(error_msg)
+                return False, f"HTTP {response.status_code}: {error_detail}", "", should_skip
             except:
-                return False, f"HTTP {response.status_code}: {response.text[:200]}", ""
+                error_msg = response.text[:200]
+                should_skip = is_skip_error(error_msg)
+                return False, f"HTTP {response.status_code}: {error_msg}", "", should_skip
             
     except requests.exceptions.Timeout:
-        return False, "请求超时", ""
+        return False, "请求超时", "", False
     except requests.exceptions.RequestException as e:
-        return False, f"请求异常: {str(e)}", ""
+        return False, f"请求异常: {str(e)}", "", False
     except Exception as e:
-        return False, f"未知错误: {str(e)}", ""
+        return False, f"未知错误: {str(e)}", "", False
 
 
 def save_summary(dataset_id, document_id, document_name, summary):
@@ -232,21 +260,22 @@ def save_summary(dataset_id, document_id, document_name, summary):
 def generate_and_save_summary(dataset_id, document_id, document_name):
     """
     生成并保存文档摘要（两步操作）
-    返回: (success: bool, message: str)
+    返回: (success: bool, message: str, should_skip: bool)
+    should_skip=True 表示遇到不可恢复的错误（如超过上下文限制），不应重试
     """
     # 第一步：生成摘要
-    success, message, summary = generate_summary(dataset_id, document_id, document_name)
+    success, message, summary, should_skip = generate_summary(dataset_id, document_id, document_name)
     if not success:
-        return False, f"生成失败: {message}"
+        return False, f"生成失败: {message}", should_skip
     
     log.info(f"      摘要内容: {summary[:80]}..." if len(summary) > 80 else f"      摘要内容: {summary}")
     
     # 第二步：保存摘要
     save_success, save_message = save_summary(dataset_id, document_id, document_name, summary)
     if not save_success:
-        return False, f"保存失败: {save_message}"
+        return False, f"保存失败: {save_message}", False
     
-    return True, "生成并保存成功"
+    return True, "生成并保存成功", False
 
 
 def process_single_doc(doc_info, doc_index, total_docs):
@@ -346,12 +375,12 @@ def scan_and_generate(workspace_id, workspace_name):
             
             # 立即处理这个知识库的文档
             for idx, doc_info in enumerate(docs_to_process, 1):
-                log.info(f"  [{idx}/{len(docs_to_process)}] 处理文档: {doc_info['document_name']}")
-                log.info(f"    文档ID: {doc_info['document_id']}")
+                log.info(f"  [{idx}/{len(docs_to_process)}] [{folder_path}] {doc_info['document_name']}")
+                log.info(f"    知识库: {dataset_name} | 文档ID: {doc_info['document_id']}")
                 
                 # 调用 API 生成并保存摘要
                 for attempt in range(1, MAX_RETRIES + 1):
-                    success, message = generate_and_save_summary(
+                    success, message, should_skip = generate_and_save_summary(
                         doc_info['dataset_id'],
                         doc_info['document_id'],
                         doc_info['document_name']
@@ -360,6 +389,11 @@ def scan_and_generate(workspace_id, workspace_name):
                     if success:
                         log.info(f"    [成功] {message}")
                         total_success += 1
+                        break
+                    elif should_skip:
+                        # 遇到不可恢复的错误（如超过上下文限制），直接跳过
+                        log.warning(f"    [跳过] 文档过大或超过模型上下文限制: {message}")
+                        total_skip += 1
                         break
                     else:
                         log.warning(f"    [失败] 第{attempt}次尝试: {message}")

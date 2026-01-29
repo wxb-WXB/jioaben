@@ -62,42 +62,48 @@ log = logging.getLogger("autoUploadsToFolder")
 # - folder_id: 远程目录ID（从 folder.db 或平台获取）
 # - dataset_name: 知识库名称（如果不存在会自动创建）
 UPLOAD_TASKS = [
+    # 已传完：总数：2781
     # {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\02先行段施工施工文件',
     #     "folder_id": "75fd2157-9386-4594-91fc-b20f3ecf45d1",
     #     "dataset_name": "02先行段施工施工文件",
     # },
+    # 已传完：总数：17697
     # {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\03土建A1施工文件',
     #     "folder_id": "eb7d5b3b-a8ef-4622-9cfb-e32239e299ec",
     #     "dataset_name": "03土建A1施工文件",
     # },
+    # 已上传：总数：7091
     # {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\04土建A2施工文件',
     #     "folder_id": "a0f17c82-8442-4e0e-8b44-06a687383c83",
     #     "dataset_name": "04土建A2施工文件",
     # },
+    # 已上传：总数：11115
     #  {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\05土建A3施工文件',
     #     "folder_id": "2bfa4cd1-0f28-4077-82d8-85f611efa92a",
     #     "dataset_name": "05土建A3施工文件",
     # },
     # 总数：5903
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\06土建A4施工文件',
-        "folder_id": "7c122d22-37cf-4efc-a556-63b64ce21a04",
-        "dataset_name": "06土建A4施工文件",
-    },
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\06土建A4施工文件',
+    #     "folder_id": "7c122d22-37cf-4efc-a556-63b64ce21a04",
+    #     "dataset_name": "06土建A4施工文件",
+    # },
+    # 总数：11395
     #  {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\07土建A5施工文件',
     #     "folder_id": "f7ca95e3-69c2-4efb-a2a9-80cb3a9d5a26",
     #     "dataset_name": "07土建A5施工文件",
     # },
-    #  {
-    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\08土建A6施工文件',
-    #     "folder_id": "d9439792-b847-4466-923b-2c5b46f2847b",
-    #     "dataset_name": "08土建A6施工文件",
-    # },
+    # 总数：11395
+     {
+        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\08土建A6施工文件',
+        "folder_id": "d9439792-b847-4466-923b-2c5b46f2847b",
+        "dataset_name": "08土建A6施工文件",
+    },
     # {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\09土建A7施工文件',
     #     "folder_id": "3a4523b1-c495-432a-b0dd-feeb60bc9600",
@@ -169,7 +175,7 @@ UPLOAD_TASKS = [
     #     "folder_id": "6331f863-f6f4-4535-b281-e7c763e60ebb",
     #     "dataset_name": "21安全监测02标",
     # },
-    # 已确认----待传--891个文件-成功上传 595 跳过文件 295 失败 1
+    # 已确认----已上传--891个文件-成功上传 595 跳过文件 295 失败 1
     #   {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\22安全监测03标',
     #     "folder_id": "ddae4a90-dc50-4310-940d-50465739bddb",
@@ -209,10 +215,14 @@ RUN_MODE = "upload"
 # ==================================
 
 # ============ 性能配置 ============
-MAX_WORKERS = 5               # 每个任务的并发线程数
-MAX_CONCURRENT_TASKS = 2      # 同时处理的任务数（几个文件夹同时上传）
+MAX_WORKERS = 4               # 每个任务的并发线程数（降低并发避免503）
+MAX_CONCURRENT_TASKS = 2      # 同时处理的任务数
 SKIP_IMAGE_CHECK = True       # 是否跳过PDF图片检测
-REQUEST_INTERVAL = 0.2        # 请求间隔时间（秒）
+REQUEST_INTERVAL = 0.5        # 请求间隔时间（秒）
+CONNECTION_RETRY_DELAY = 3    # 连接被拒绝时的重试等待时间（秒）
+MAX_CONNECTION_RETRIES = 5    # 连接错误最大重试次数
+MAX_UPLOAD_RETRIES = 3        # 上传失败最大重试次数（针对503等错误）
+UPLOAD_RETRY_DELAY = 10       # 上传失败重试等待时间（秒）
 # ==================================
 
 # ============ 过滤配置 ============
@@ -481,7 +491,6 @@ def process_file(file_info):
         return
     
     # 重名检测
-    rate_limited_sleep()
     file_name_without_ext = os.path.splitext(file_name)[0]
     response_code, response, duplicate_count = lingyanDataset.check_file(
         file_name=file_name_without_ext,
@@ -521,38 +530,68 @@ def process_file(file_info):
             _print_progress()
         return
     
-    # 上传文件
+    # 上传文件（带重试机制，处理503等服务器错误）
     thread_log.info(f"开始上传：{rel_path}")
-    rate_limited_sleep()
-    response_code, upload_response = lingyanFile.upload_file(
-        file_path=abs_path,
-        file_type="dataset",
-    )
+    upload_file_id = None
     
-    if response_code != 200:
-        thread_log.error(f"文件上传失败：{rel_path}，{response_code}, {upload_response}")
-        failed_manager.add_record(
+    for upload_attempt in range(MAX_UPLOAD_RETRIES + 1):
+        response_code, upload_response = lingyanFile.upload_file(
             file_path=abs_path,
-            file_name=file_name,
-            file_classify=dataset_name,
-            error_stage=FailedRecord.STAGE_UPLOAD_FILE,
-            error_message=f"上传失败：{response_code}, {upload_response}",
-            error_code=response_code,
-            dataset_name=dataset_name,
-            folder_id=folder_id,
-            dataset_id=dataset_id,
+            file_type="dataset",
         )
-        with stats_lock:
-            stats['error_count'] += 1
-            stats['processed_count'] += 1
-            _print_progress()
+        
+        if response_code == 200:
+            upload_file_id = upload_response.get("id")
+            thread_log.info(f"文件上传成功：{rel_path}，文件ID={upload_file_id}")
+            break
+        elif response_code in [502, 503, 504]:
+            # 服务器过载，等待后重试
+            if upload_attempt < MAX_UPLOAD_RETRIES:
+                wait_time = UPLOAD_RETRY_DELAY * (upload_attempt + 1)
+                thread_log.warning(f"服务器繁忙({response_code})，{wait_time}秒后重试 ({upload_attempt + 1}/{MAX_UPLOAD_RETRIES})：{rel_path}")
+                time.sleep(wait_time)
+            else:
+                thread_log.error(f"文件上传失败（服务器繁忙，已重试{MAX_UPLOAD_RETRIES}次）：{rel_path}，{response_code}")
+                failed_manager.add_record(
+                    file_path=abs_path,
+                    file_name=file_name,
+                    file_classify=dataset_name,
+                    error_stage=FailedRecord.STAGE_UPLOAD_FILE,
+                    error_message=f"上传失败（服务器繁忙）：{response_code}, {upload_response}",
+                    error_code=response_code,
+                    dataset_name=dataset_name,
+                    folder_id=folder_id,
+                    dataset_id=dataset_id,
+                )
+                with stats_lock:
+                    stats['error_count'] += 1
+                    stats['processed_count'] += 1
+                    _print_progress()
+                return
+        else:
+            # 其他错误，不重试
+            thread_log.error(f"文件上传失败：{rel_path}，{response_code}, {upload_response}")
+            failed_manager.add_record(
+                file_path=abs_path,
+                file_name=file_name,
+                file_classify=dataset_name,
+                error_stage=FailedRecord.STAGE_UPLOAD_FILE,
+                error_message=f"上传失败：{response_code}, {upload_response}",
+                error_code=response_code,
+                dataset_name=dataset_name,
+                folder_id=folder_id,
+                dataset_id=dataset_id,
+            )
+            with stats_lock:
+                stats['error_count'] += 1
+                stats['processed_count'] += 1
+                _print_progress()
+            return
+    
+    if not upload_file_id:
         return
     
-    upload_file_id = upload_response.get("id")
-    thread_log.info(f"文件上传成功：{rel_path}，文件ID={upload_file_id}")
-    
     # 创建文档
-    rate_limited_sleep()
     response_code, newDoc = lingyanDataset.create_document(
         dataset_id=dataset_id,
         file_id=upload_file_id,
@@ -591,7 +630,6 @@ def process_file(file_info):
             has_img = False
     
     # 创建任务
-    rate_limited_sleep()
     response_code, task_response = lingyanDataset.create_task(
         dataset_id,
         newDocId,
@@ -635,23 +673,48 @@ def process_file(file_info):
 
 
 def process_file_safe(file_info):
-    """安全包装，捕获异常"""
-    try:
-        process_file(file_info)
-    except Exception as e:
-        rel_path, abs_path, folder_id, dataset_name = file_info
-        log.error(f"处理文件时发生异常：{rel_path}，错误：{str(e)}")
-        failed_manager.add_record(
-            file_path=abs_path,
-            file_name=os.path.basename(abs_path),
-            file_classify=dataset_name,
-            error_stage=FailedRecord.STAGE_UNKNOWN,
-            error_message=f"未知错误：{str(e)}",
-        )
-        with stats_lock:
-            stats['error_count'] += 1
-            stats['processed_count'] += 1
-            _print_progress()
+    """安全包装，捕获异常，带连接错误重试"""
+    rel_path, abs_path, folder_id, dataset_name = file_info
+    
+    for retry in range(MAX_CONNECTION_RETRIES + 1):
+        try:
+            process_file(file_info)
+            return  # 成功则直接返回
+        except (requests.exceptions.ConnectionError, 
+                requests.exceptions.Timeout,
+                ConnectionRefusedError,
+                ConnectionResetError) as e:
+            if retry < MAX_CONNECTION_RETRIES:
+                wait_time = CONNECTION_RETRY_DELAY * (retry + 1)
+                log.warning(f"连接错误，{wait_time}秒后重试({retry+1}/{MAX_CONNECTION_RETRIES})：{rel_path}")
+                time.sleep(wait_time)
+            else:
+                log.error(f"连接错误，已达最大重试次数：{rel_path}，错误：{str(e)}")
+                failed_manager.add_record(
+                    file_path=abs_path,
+                    file_name=os.path.basename(abs_path),
+                    file_classify=dataset_name,
+                    error_stage=FailedRecord.STAGE_UNKNOWN,
+                    error_message=f"连接错误：{str(e)}",
+                )
+                with stats_lock:
+                    stats['error_count'] += 1
+                    stats['processed_count'] += 1
+                    _print_progress()
+        except Exception as e:
+            log.error(f"处理文件时发生异常：{rel_path}，错误：{str(e)}")
+            failed_manager.add_record(
+                file_path=abs_path,
+                file_name=os.path.basename(abs_path),
+                file_classify=dataset_name,
+                error_stage=FailedRecord.STAGE_UNKNOWN,
+                error_message=f"未知错误：{str(e)}",
+            )
+            with stats_lock:
+                stats['error_count'] += 1
+                stats['processed_count'] += 1
+                _print_progress()
+            return  # 非连接错误不重试
 
 
 def check_upload_status(valid_tasks):

@@ -39,13 +39,13 @@ WORKSPACE_NAME = "环北工程知识库"
 GENERATE_CONFIG = {
     "title": {
         "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-        "name": "chat",
-        "mode": "deepseekv3-0324",
+        "name": "deepseekv3-0324",
+        "mode": "chat",
         "size": 32768,
         "completion_params": {
-           "temperature": 0.2,
+            "temperature": 0.2,
             "top_p": 0.75,
-            "max_tokens": 3200
+            "max_tokens": 8000
         }
     },
     "summary": {
@@ -56,7 +56,7 @@ GENERATE_CONFIG = {
         "completion_params": {
             "temperature": 0.2,
             "top_p": 0.75,
-            "max_tokens": 3200
+            "max_tokens": 8000
         }
     },
     "question": {
@@ -67,7 +67,7 @@ GENERATE_CONFIG = {
         "completion_params": {
             "temperature": 0.2,
             "top_p": 0.75,
-            "max_tokens": 3200
+            "max_tokens": 8000
         }
     }
 }

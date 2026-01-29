@@ -159,7 +159,7 @@ class LingyanFile:
         """
         self.api_key = api_key
 
-    def upload_file(self, file_path: str, file_type: str = "app", max_retries: int = 5) -> tuple[int, dict]:
+    def upload_file(self, file_path: str, file_type: str = "app", max_retries: int = 3) -> tuple[int, dict]:
         """
         上传文件（带重试机制）
         ----
@@ -171,7 +171,7 @@ class LingyanFile:
                 - tool: 工具
                 - chat: 聊天
                 - avatar: 头像
-            max_retries (int): 最大重试次数，默认5次
+            max_retries (int): 最大重试次数，默认3次
         """
         if file_type not in ["app", "dataset", "tool", "chat", "avatar"]:
             raise ValueError(
@@ -179,15 +179,11 @@ class LingyanFile:
             )
 
         url = "http://10.4.49.66:18080/api/v1/service/files/upload"
-
-        headers = {
-            "accept": "application/json",
-            "X-API-Key": self.api_key,
-            "Accept-Encoding": "gzip, deflate, br",
-            "User-Agent": "python-requests/2.28.1",
-            "Connection": "keep-alive",
-            "content-type": "multipart/form-data; boundary=---011000010111000001101001",
-        }
+        
+        # 根据文件大小动态设置超时时间
+        file_size_mb = os.path.getsize(file_path) / (1024 * 1024)
+        # 基础60秒 + 每MB增加2秒，最少60秒，最多600秒（10分钟）
+        timeout = min(max(60, int(60 + file_size_mb * 2)), 600)
 
         last_error = None
         for attempt in range(max_retries + 1):
@@ -201,24 +197,30 @@ class LingyanFile:
                     }
                 )
                 
-                request_headers = {**headers, "Content-Type": encoder.content_type}  # 带 boundary
+                # 每次请求使用新的session，避免连接池问题
+                session = requests.Session()
+                request_headers = {
+                    "accept": "application/json",
+                    "X-API-Key": self.api_key,
+                    "Content-Type": encoder.content_type,
+                    "Connection": "close",  # 上传完成后关闭连接
+                }
 
-                session = get_session()
-                # 文件上传使用更长的超时时间（5分钟），大文件需要更多时间
-                response = session.request("POST", url, data=encoder, headers=request_headers, timeout=300)
+                response = session.post(url, data=encoder, headers=request_headers, timeout=timeout)
                 f.close()
+                session.close()  # 显式关闭session
                 return response.status_code, response.json().get("data")
             except requests.exceptions.ReadTimeout as e:
-                # 读取超时：服务器处理时间过长，等待更长时间后重试
+                # 读取超时：服务器处理时间过长，等待后重试
                 if f:
                     f.close()
                 last_error = e
                 if attempt < max_retries:
-                    delay = 30 * (attempt + 1)  # 超时用更长等待: 30, 60, 90, 120, 150 秒
-                    log.warning(f"文件上传读取超时，服务器处理中，{delay}秒后重试 ({attempt + 1}/{max_retries}): {file_path}")
+                    delay = 10 * (attempt + 1)  # 10, 20, 30 秒
+                    log.warning(f"文件上传读取超时({timeout}秒)，{delay}秒后重试 ({attempt + 1}/{max_retries}): {os.path.basename(file_path)}")
                     time.sleep(delay)
                 else:
-                    log.error(f"文件上传超时，已达最大重试次数: {file_path} - {str(e)}")
+                    log.error(f"文件上传超时，已达最大重试次数: {os.path.basename(file_path)}")
             except (requests.exceptions.ConnectionError, 
                     requests.exceptions.Timeout,
                     requests.exceptions.ChunkedEncodingError) as e:
@@ -226,11 +228,11 @@ class LingyanFile:
                     f.close()
                 last_error = e
                 if attempt < max_retries:
-                    delay = 2 * (2 ** attempt)  # 指数退避: 2, 4, 8, 16, 32 秒
-                    log.warning(f"文件上传连接错误，{delay}秒后重试 ({attempt + 1}/{max_retries}): {file_path} - {str(e)}")
+                    delay = 5 * (attempt + 1)  # 5, 10, 15 秒
+                    log.warning(f"文件上传连接错误，{delay}秒后重试 ({attempt + 1}/{max_retries}): {os.path.basename(file_path)}")
                     time.sleep(delay)
                 else:
-                    log.error(f"文件上传失败，已达最大重试次数: {file_path} - {str(e)}")
+                    log.error(f"文件上传失败，已达最大重试次数: {os.path.basename(file_path)}")
             except requests.exceptions.RequestException as e:
                 if f:
                     f.close()
@@ -287,7 +289,7 @@ def build_file_info(file_info: dict) -> dict:
 
 class LingyanDataset:
     """
-    灵眼AI知识库服务类
+    灵燕AI知识库服务类
     
     提供知识库的完整生命周期管理，包括：
     - 知识库的创建、查询、更新
@@ -624,35 +626,35 @@ class LingyanDataset:
                 "index_config": {
                     "title": {
                         "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-                        "name": "qwen-turbo",
+                        "name": "deepseekv3-0324",
                         "mode": "chat",
                         "size": 32768,
                         "completion_params": {
                             "temperature": 0.2,
                             "top_p": 0.75,
-                            "max_tokens": 512,
+                            "max_tokens": 8000,
                         },
                     },
                     "summary": {
                         "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-                        "name": "qwen-turbo",
+                        "name": "deepseekv3-0324",
                         "mode": "chat",
                         "size": 32768,
                         "completion_params": {
                             "temperature": 0.2,
                             "top_p": 0.75,
-                            "max_tokens": 512,
+                            "max_tokens": 8000,
                         },
                     },
                     "question": {
                         "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-                        "name": "qwen-turbo",
+                        "name": "deepseekv3-0324",
                         "mode": "chat",
                         "size": 32768,
                         "completion_params": {
                             "temperature": 0.2,
                             "top_p": 0.75,
-                            "max_tokens": 8192,
+                            "max_tokens": 8000,
                         },
                     },
                 },
@@ -661,13 +663,13 @@ class LingyanDataset:
                 "doc_summary": True,
                 "doc_summary_config": {
                     "provider": "langgenius/openai_api_compatible/openai_api_compatible",
-                    "name": "qwen-turbo",
+                    "name": "deepseekv3-0324",
                     "mode": "chat",
                     "size": 32768,
                     "completion_params": {
                         "temperature": 0.2,
                         "top_p": 0.75,
-                        "max_tokens": 512,
+                        "max_tokens": 8000,
                     },
                 },
             },
