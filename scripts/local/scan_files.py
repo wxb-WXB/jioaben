@@ -9,6 +9,7 @@
 - 按一级目录分类统计
 - 支持所有文件类型：文档、图片、视频、压缩包等
 - 输出详细日志文件
+- 支持多进程并行扫描多个目录
 
 使用方法：
 1. 修改下方 SCAN_DIRS 配置要扫描的目录
@@ -22,6 +23,11 @@ import tempfile
 import shutil
 from datetime import datetime
 from collections import defaultdict
+from concurrent.futures import ProcessPoolExecutor, as_completed
+import multiprocessing
+from multiprocessing import Manager
+import threading
+import time
 
 # 添加项目根目录到路径
 script_dir = os.path.dirname(os.path.abspath(__file__))
@@ -57,6 +63,9 @@ SCAN_DIRS = DEFAULT_SCAN_DIRS or [
 
 # 是否解压压缩文件进行统计（可能会比较慢）
 EXTRACT_ARCHIVES = True
+
+# 并行扫描的进程数（None表示自动使用CPU核心数）
+PARALLEL_WORKERS = None
 
 # 日志输出目录
 LOG_DIR = os.path.join(project_root, "logs")
@@ -253,7 +262,7 @@ def extract_and_scan_archive(archive_path, ext_stats, category_stats, logger):
     return total_files, total_size
 
 
-def scan_directory(root_dir, logger, extract_archives=True):
+def scan_directory(root_dir, logger=None, extract_archives=True, progress_dict=None):
     """递归扫描目录所有层级，返回统计数据"""
     total_files = 0
     total_size = 0
@@ -261,6 +270,9 @@ def scan_directory(root_dir, logger, extract_archives=True):
     archive_count = 0
     archive_files_count = 0
     archive_files_size = 0
+    
+    # 用于进度显示的目录名
+    dir_name = os.path.basename(root_dir) or root_dir
     
     ext_stats = defaultdict(lambda: {'count': 0, 'size': 0, 'archive_count': 0, 'archive_size': 0})
     category_stats = defaultdict(lambda: {'count': 0, 'size': 0, 'archive_count': 0, 'archive_size': 0})
@@ -274,9 +286,13 @@ def scan_directory(root_dir, logger, extract_archives=True):
     for dirpath, dirnames, filenames in os.walk(root_dir):
         dir_count += 1
         
-        # 显示扫描进度
-        if dir_count % 100 == 0:
-            logger.log(f"\r    已扫描 {dir_count} 个目录, {total_files} 个文件...", end="", console_only=True)
+        # 更新共享进度（用于多进程）
+        if progress_dict is not None:
+            progress_dict[dir_name] = f"{dir_count} 目录, {total_files} 文件"
+        
+        # 显示扫描进度（仅在有logger时显示，单进程模式）
+        if logger and dir_count % 100 == 0:
+            logger.log(f"\r    [{dir_name}] 已扫描 {dir_count} 个目录, {total_files} 个文件...", end="", console_only=True)
         
         rel_path = os.path.relpath(dirpath, root_dir)
         
@@ -312,37 +328,140 @@ def scan_directory(root_dir, logger, extract_archives=True):
             # 如果是压缩文件且开启了解压统计
             if extract_archives and ext in SUPPORTED_ARCHIVES:
                 archive_count += 1
-                files_in_archive, size_in_archive = extract_and_scan_archive(
-                    filepath, ext_stats, category_stats, logger
+                files_in_archive, size_in_archive = extract_and_scan_archive_silent(
+                    filepath, ext_stats, category_stats
                 )
                 archive_files_count += files_in_archive
                 archive_files_size += size_in_archive
                 folder_stats[top_folder]['archive_files'] += files_in_archive
     
-    logger.log(f"\r    完成! 共扫描 {dir_count} 个目录, {total_files} 个文件" + " " * 20, console_only=True)
+    # 标记完成
+    if progress_dict is not None:
+        progress_dict[dir_name] = f"✓ 完成: {dir_count} 目录, {total_files} 文件"
     
-    return {
+    if logger:
+        logger.log(f"\r    [{dir_name}] 完成! 共扫描 {dir_count} 个目录, {total_files} 个文件" + " " * 20, console_only=True)
+    
+    # 将defaultdict转换为普通dict以便跨进程传递
+    result = {
+        'scan_dir': root_dir,
         'total_files': total_files,
         'total_size': total_size,
-        'ext_stats': ext_stats,
-        'category_stats': category_stats,
-        'folder_stats': folder_stats,
+        'ext_stats': dict(ext_stats),
+        'category_stats': dict(category_stats),
+        'folder_stats': {k: {'count': v['count'], 'size': v['size'], 'categories': dict(v['categories']), 'archive_files': v['archive_files']} for k, v in folder_stats.items()},
         'archive_count': archive_count,
         'archive_files_count': archive_files_count,
         'archive_files_size': archive_files_size,
     }
+    return result
+
+
+def extract_and_scan_archive_silent(archive_path, ext_stats, category_stats):
+    """
+    解压压缩文件并统计其中的内容（静默版本，不输出日志）
+    返回: (文件数, 总大小)
+    """
+    total_files = 0
+    total_size = 0
+    ext = get_file_extension(archive_path)
+    
+    temp_dir = None
+    try:
+        temp_dir = tempfile.mkdtemp(prefix="scan_archive_")
+        
+        # 根据格式解压
+        if ext == 'zip':
+            try:
+                with zipfile.ZipFile(archive_path, 'r') as zf:
+                    for info in zf.infolist():
+                        if not info.is_dir():
+                            filename = os.path.basename(info.filename)
+                            file_ext = get_file_extension(filename)
+                            file_category = get_file_category(file_ext)
+                            file_size = info.file_size
+                            
+                            total_files += 1
+                            total_size += file_size
+                            
+                            ext_stats[file_ext]['count'] += 1
+                            ext_stats[file_ext]['size'] += file_size
+                            ext_stats[file_ext]['archive_count'] += 1
+                            ext_stats[file_ext]['archive_size'] += file_size
+                            
+                            category_stats[file_category]['count'] += 1
+                            category_stats[file_category]['size'] += file_size
+                            category_stats[file_category]['archive_count'] += 1
+                            category_stats[file_category]['archive_size'] += file_size
+            except:
+                pass
+                
+        elif ext in ('tar', 'gz', 'tgz', 'bz2', 'tbz2', 'xz'):
+            try:
+                mode = 'r'
+                if ext in ('gz', 'tgz'):
+                    mode = 'r:gz'
+                elif ext in ('bz2', 'tbz2'):
+                    mode = 'r:bz2'
+                elif ext == 'xz':
+                    mode = 'r:xz'
+                
+                with tarfile.open(archive_path, mode) as tf:
+                    for member in tf.getmembers():
+                        if member.isfile():
+                            filename = os.path.basename(member.name)
+                            file_ext = get_file_extension(filename)
+                            file_category = get_file_category(file_ext)
+                            file_size = member.size
+                            
+                            total_files += 1
+                            total_size += file_size
+                            
+                            ext_stats[file_ext]['count'] += 1
+                            ext_stats[file_ext]['size'] += file_size
+                            ext_stats[file_ext]['archive_count'] += 1
+                            ext_stats[file_ext]['archive_size'] += file_size
+                            
+                            category_stats[file_category]['count'] += 1
+                            category_stats[file_category]['size'] += file_size
+                            category_stats[file_category]['archive_count'] += 1
+                            category_stats[file_category]['archive_size'] += file_size
+            except:
+                pass
+    
+    except:
+        pass
+    
+    finally:
+        if temp_dir and os.path.exists(temp_dir):
+            try:
+                shutil.rmtree(temp_dir)
+            except:
+                pass
+    
+    return total_files, total_size
+
+
+def scan_directory_worker(args):
+    """多进程工作函数，包装scan_directory"""
+    scan_dir, extract_archives, progress_dict = args
+    if not os.path.exists(scan_dir):
+        return None
+    return scan_directory(scan_dir, logger=None, extract_archives=extract_archives, progress_dict=progress_dict)
 
 
 def format_size(size_bytes):
-    """格式化文件大小"""
+    """格式化文件大小（支持到TB级别）"""
     if size_bytes < 1024:
         return f"{size_bytes} B"
     elif size_bytes < 1024 * 1024:
         return f"{size_bytes / 1024:.2f} KB"
     elif size_bytes < 1024 * 1024 * 1024:
         return f"{size_bytes / (1024 * 1024):.2f} MB"
-    else:
+    elif size_bytes < 1024 * 1024 * 1024 * 1024:
         return f"{size_bytes / (1024 * 1024 * 1024):.2f} GB"
+    else:
+        return f"{size_bytes / (1024 * 1024 * 1024 * 1024):.2f} TB"
 
 
 def main():
@@ -376,13 +495,87 @@ def main():
         'archive_files': 0
     })
     
+    # 检查目录是否存在
+    valid_dirs = []
     for scan_dir in SCAN_DIRS:
         if not os.path.exists(scan_dir):
             logger.log(f"警告: 目录不存在，跳过 - {scan_dir}")
-            continue
+        else:
+            valid_dirs.append(scan_dir)
+    
+    if not valid_dirs:
+        logger.log("错误: 没有有效的扫描目录!")
+        return
+    
+    # 确定并行进程数
+    num_workers = PARALLEL_WORKERS or min(len(valid_dirs), multiprocessing.cpu_count())
+    logger.log(f"\n使用 {num_workers} 个进程并行扫描 {len(valid_dirs)} 个目录...")
+    
+    # 并行扫描所有目录
+    results = []
+    if len(valid_dirs) == 1:
+        # 只有一个目录时，直接扫描（避免多进程开销）
+        logger.log(f"\n扫描中: {valid_dirs[0]} ...")
+        result = scan_directory(valid_dirs[0], logger, EXTRACT_ARCHIVES)
+        if result:
+            results.append(result)
+    else:
+        # 多个目录时，使用多进程并行扫描
+        # 创建共享的进度字典
+        manager = Manager()
+        progress_dict = manager.dict()
+        total_dirs = len(valid_dirs)
         
-        logger.log(f"\n扫描中: {scan_dir} ...")
-        result = scan_directory(scan_dir, logger, EXTRACT_ARCHIVES)
+        # 进度显示标志
+        stop_progress = threading.Event()
+        
+        def show_progress():
+            """后台线程显示进度条"""
+            bar_width = 30
+            while not stop_progress.is_set():
+                # 统计完成数量
+                completed = sum(1 for s in progress_dict.values() if s.startswith("✓"))
+                percent = completed / total_dirs * 100
+                filled = int(bar_width * completed / total_dirs)
+                bar = "█" * filled + "░" * (bar_width - filled)
+                print(f"\r  扫描进度: [{bar}] {percent:5.1f}% ({completed}/{total_dirs})", end="", flush=True)
+                time.sleep(0.3)
+        
+        # 启动进度显示线程
+        progress_thread = threading.Thread(target=show_progress, daemon=True)
+        progress_thread.start()
+        
+        try:
+            with ProcessPoolExecutor(max_workers=num_workers) as executor:
+                # 提交所有任务
+                future_to_dir = {
+                    executor.submit(scan_directory_worker, (scan_dir, EXTRACT_ARCHIVES, progress_dict)): scan_dir 
+                    for scan_dir in valid_dirs
+                }
+                
+                # 收集结果
+                for future in as_completed(future_to_dir):
+                    scan_dir = future_to_dir[future]
+                    try:
+                        result = future.result()
+                        if result:
+                            results.append(result)
+                    except Exception as e:
+                        logger.log(f"\n  ✗ 失败: {scan_dir} - {e}")
+        finally:
+            # 停止进度显示
+            stop_progress.set()
+            progress_thread.join(timeout=1)
+            # 显示完成的进度条
+            bar = "█" * 30
+            print(f"\r  扫描进度: [{bar}] 100.0% ({total_dirs}/{total_dirs})")
+        
+        logger.log(f"  共扫描 {sum(r['total_files'] for r in results)} 个文件, {format_size(sum(r['total_size'] for r in results))}")
+    
+    # 合并所有结果
+    logger.log(f"\n合并 {len(results)} 个目录的统计结果...")
+    for result in results:
+        scan_dir = result['scan_dir']
         
         total_files += result['total_files']
         total_size += result['total_size']
@@ -393,14 +586,14 @@ def main():
         for ext, stats in result['ext_stats'].items():
             ext_stats[ext]['count'] += stats['count']
             ext_stats[ext]['size'] += stats['size']
-            ext_stats[ext]['archive_count'] += stats['archive_count']
-            ext_stats[ext]['archive_size'] += stats['archive_size']
+            ext_stats[ext]['archive_count'] += stats.get('archive_count', 0)
+            ext_stats[ext]['archive_size'] += stats.get('archive_size', 0)
         
         for cat, stats in result['category_stats'].items():
             category_stats[cat]['count'] += stats['count']
             category_stats[cat]['size'] += stats['size']
-            category_stats[cat]['archive_count'] += stats['archive_count']
-            category_stats[cat]['archive_size'] += stats['archive_size']
+            category_stats[cat]['archive_count'] += stats.get('archive_count', 0)
+            category_stats[cat]['archive_size'] += stats.get('archive_size', 0)
         
         drive = os.path.splitdrive(scan_dir)[0]
         for folder, stats in result['folder_stats'].items():
