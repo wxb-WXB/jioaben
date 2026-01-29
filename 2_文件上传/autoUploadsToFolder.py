@@ -82,11 +82,12 @@ UPLOAD_TASKS = [
     #     "folder_id": "2bfa4cd1-0f28-4077-82d8-85f611efa92a",
     #     "dataset_name": "05土建A3施工文件",
     # },
-    #  {
-    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\06土建A4施工文件',
-    #     "folder_id": "7c122d22-37cf-4efc-a556-63b64ce21a04",
-    #     "dataset_name": "06土建A4施工文件",
-    # },
+    # 总数：5903
+     {
+        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\06土建A4施工文件',
+        "folder_id": "7c122d22-37cf-4efc-a556-63b64ce21a04",
+        "dataset_name": "06土建A4施工文件",
+    },
     #  {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\07土建A5施工文件',
     #     "folder_id": "f7ca95e3-69c2-4efb-a2a9-80cb3a9d5a26",
@@ -132,24 +133,24 @@ UPLOAD_TASKS = [
     #     "folder_id": "ca8036d3-ef54-49e2-b6be-8a9d9af98369",
     #     "dataset_name": "15土建C2施工文件",
     # },
-    # 开始传
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\16土建D1施工文件',
-        "folder_id": "9260f6d0-136d-4a28-9e22-ac8b1b2359df",
-        "dataset_name": "16土建D1施工文件",
-    },
-     # 开始传
-     {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\17土建D2施工文件',
-        "folder_id": "3440be43-94b7-4db7-bbc2-a8c1b57c1431",
-        "dataset_name": "17土建D2施工文件",
-    },
-    # 开始传----上传中--个文件-23888-还没传完
-    {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\18土建D3施工文件',
-        "folder_id": "c5fc7625-82f2-45e2-a538-765b835e0755",
-        "dataset_name": "18土建D3施工文件",
-    },
+    # 开始传-暂停
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\16土建D1施工文件',
+    #     "folder_id": "9260f6d0-136d-4a28-9e22-ac8b1b2359df",
+    #     "dataset_name": "16土建D1施工文件",
+    # },
+    #   # 开始传-暂停
+    #  {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\17土建D2施工文件',
+    #     "folder_id": "3440be43-94b7-4db7-bbc2-a8c1b57c1431",
+    #     "dataset_name": "17土建D2施工文件",
+    # },
+    # # 开始传----上传中--个文件-23888-还没传完-暂停
+    # {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\18土建D3施工文件',
+    #     "folder_id": "c5fc7625-82f2-45e2-a538-765b835e0755",
+    #     "dataset_name": "18土建D3施工文件",
+    # },
     # # 已确认----已上传--个文件-还没传完-服务器压力大
     #  {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\19土建D4施工文件',
@@ -209,9 +210,9 @@ RUN_MODE = "upload"
 
 # ============ 性能配置 ============
 MAX_WORKERS = 5               # 每个任务的并发线程数
-MAX_CONCURRENT_TASKS = 3      # 同时处理的任务数（几个文件夹同时上传）
+MAX_CONCURRENT_TASKS = 2      # 同时处理的任务数（几个文件夹同时上传）
 SKIP_IMAGE_CHECK = True       # 是否跳过PDF图片检测
-REQUEST_INTERVAL = 0.3        # 请求间隔时间（秒）
+REQUEST_INTERVAL = 0.2        # 请求间隔时间（秒）
 # ==================================
 
 # ============ 过滤配置 ============
@@ -232,13 +233,20 @@ stats = {
     'total_files': 0,
     'success_count': 0,
     'skip_count': 0,
-    'error_count': 0
+    'error_count': 0,
+    'pending_total': 0,      # 待上传总数
+    'processed_count': 0,    # 已处理数（成功+跳过+失败）
+    'start_time': None,      # 开始时间
 }
 stats_lock = Lock()
 
 # 请求限流
 last_request_time = 0
 request_lock = Lock()
+
+# 进度显示锁
+progress_lock = Lock()
+last_progress_time = 0
 
 def rate_limited_sleep():
     global last_request_time
@@ -248,6 +256,61 @@ def rate_limited_sleep():
         if elapsed < REQUEST_INTERVAL:
             time.sleep(REQUEST_INTERVAL - elapsed)
         last_request_time = time.time()
+
+
+def _print_progress():
+    """打印上传进度（需在 stats_lock 内调用）"""
+    global last_progress_time
+    
+    current_time = time.time()
+    
+    # 限制刷新频率，每0.5秒最多刷新一次
+    with progress_lock:
+        if current_time - last_progress_time < 0.5:
+            return
+        last_progress_time = current_time
+    
+    pending_total = stats['pending_total']
+    processed = stats['processed_count']
+    success = stats['success_count']
+    skip = stats['skip_count']
+    error = stats['error_count']
+    start_time = stats['start_time']
+    
+    if pending_total <= 0:
+        return
+    
+    # 计算进度百分比
+    progress = (processed / pending_total) * 100 if pending_total > 0 else 0
+    
+    # 计算预计剩余时间
+    eta_str = "计算中..."
+    if start_time and processed > 0:
+        elapsed = current_time - start_time
+        avg_time_per_file = elapsed / processed
+        remaining = pending_total - processed
+        eta_seconds = remaining * avg_time_per_file
+        
+        if eta_seconds < 60:
+            eta_str = f"{int(eta_seconds)}秒"
+        elif eta_seconds < 3600:
+            eta_str = f"{int(eta_seconds // 60)}分{int(eta_seconds % 60)}秒"
+        else:
+            hours = int(eta_seconds // 3600)
+            minutes = int((eta_seconds % 3600) // 60)
+            eta_str = f"{hours}小时{minutes}分"
+        
+        # 计算预计完成时间
+        finish_time = datetime.fromtimestamp(current_time + eta_seconds)
+        finish_str = finish_time.strftime("%H:%M:%S")
+        eta_str = f"{eta_str} (预计{finish_str}完成)"
+    
+    # 打印进度条
+    progress_bar_len = 20
+    filled = int(progress_bar_len * processed / pending_total) if pending_total > 0 else 0
+    bar = "█" * filled + "░" * (progress_bar_len - filled)
+    
+    print(f"\r📊 进度: [{bar}] {progress:.1f}% | 总数:{pending_total} 成功:{success} 跳过:{skip} 失败:{error} | 剩余:{eta_str}    ", end="", flush=True)
 
 # 初始化记录管理器
 failed_manager = FailedRecordsManager()
@@ -384,6 +447,8 @@ def process_file(file_info):
         thread_log.info(f"已上传过，跳过：{rel_path}")
         with stats_lock:
             stats['skip_count'] += 1
+            stats['processed_count'] += 1
+            _print_progress()
         return
     
     # 检查文件扩展名
@@ -392,6 +457,8 @@ def process_file(file_info):
         thread_log.warning(f"不支持的文件类型，跳过：{rel_path}")
         with stats_lock:
             stats['skip_count'] += 1
+            stats['processed_count'] += 1
+            _print_progress()
         return
     
     # 获取知识库ID
@@ -409,6 +476,8 @@ def process_file(file_info):
         )
         with stats_lock:
             stats['error_count'] += 1
+            stats['processed_count'] += 1
+            _print_progress()
         return
     
     # 重名检测
@@ -434,6 +503,8 @@ def process_file(file_info):
         )
         with stats_lock:
             stats['error_count'] += 1
+            stats['processed_count'] += 1
+            _print_progress()
         return
     
     if duplicate_count > 0:
@@ -446,6 +517,8 @@ def process_file(file_info):
         )
         with stats_lock:
             stats['skip_count'] += 1
+            stats['processed_count'] += 1
+            _print_progress()
         return
     
     # 上传文件
@@ -471,6 +544,8 @@ def process_file(file_info):
         )
         with stats_lock:
             stats['error_count'] += 1
+            stats['processed_count'] += 1
+            _print_progress()
         return
     
     upload_file_id = upload_response.get("id")
@@ -498,6 +573,8 @@ def process_file(file_info):
         )
         with stats_lock:
             stats['error_count'] += 1
+            stats['processed_count'] += 1
+            _print_progress()
         return
     
     newDocId = newDoc[0].get("id")
@@ -537,6 +614,8 @@ def process_file(file_info):
         )
         with stats_lock:
             stats['error_count'] += 1
+            stats['processed_count'] += 1
+            _print_progress()
         return
     
     # 成功
@@ -550,6 +629,8 @@ def process_file(file_info):
     
     with stats_lock:
         stats['success_count'] += 1
+        stats['processed_count'] += 1
+        _print_progress()
     thread_log.info(f"✅ 上传完成：{rel_path}")
 
 
@@ -569,6 +650,8 @@ def process_file_safe(file_info):
         )
         with stats_lock:
             stats['error_count'] += 1
+            stats['processed_count'] += 1
+            _print_progress()
 
 
 def check_upload_status(valid_tasks):
@@ -693,6 +776,55 @@ def do_upload(valid_tasks):
     log.info(f"已加载 {success_manager.get_count()} 条成功记录")
     print("=" * 60)
     
+    # 先扫描所有任务，统计待上传总数
+    print("\n📂 正在扫描所有任务...")
+    all_pending_files = []  # [(rel_path, abs_path, folder_id, dataset_name), ...]
+    skipped_by_ext = 0      # 因文件类型跳过的数量
+    skipped_by_uploaded = 0  # 因已上传跳过的数量
+    
+    for i, task in enumerate(valid_tasks):
+        local_folder = task["local_folder"]
+        folder_id = task["folder_id"]
+        dataset_name = task["dataset_name"]
+        
+        task_files = get_all_files(local_folder, show_progress=True, task_name=dataset_name)
+        
+        # 过滤已上传的文件和不支持的文件类型
+        for rel_path, abs_path in task_files:
+            # 检查文件类型
+            file_ext = os.path.splitext(abs_path)[1].lower()
+            if file_ext in SKIP_EXTENSIONS:
+                skipped_by_ext += 1
+                continue
+            
+            # 检查是否已上传
+            if success_manager.is_uploaded(abs_path):
+                skipped_by_uploaded += 1
+                continue
+            
+            all_pending_files.append((rel_path, abs_path, folder_id, dataset_name))
+    
+    total_pending = len(all_pending_files)
+    print(f"  跳过不支持的文件类型: {skipped_by_ext} 个")
+    print(f"  跳过已上传的文件: {skipped_by_uploaded} 个")
+    print(f"\n📊 扫描完成：共 {total_pending} 个文件待上传")
+    print("=" * 60)
+    
+    if total_pending == 0:
+        print("✅ 所有文件均已上传，无需操作！")
+        return
+    
+    # 初始化统计信息
+    with stats_lock:
+        stats['pending_total'] = total_pending
+        stats['processed_count'] = 0
+        stats['success_count'] = 0
+        stats['skip_count'] = 0
+        stats['error_count'] = 0
+        stats['start_time'] = time.time()
+    
+    print(f"\n🚀 开始上传 {total_pending} 个文件...\n")
+    
     def process_single_task(task_info):
         """处理单个任务（扫描 + 上传）"""
         task_index, task = task_info
@@ -714,10 +846,17 @@ def do_upload(valid_tasks):
             log.warning(f"  [{dataset_name}] 该任务没有文件，跳过")
             return
         
-        # 过滤已上传的文件
+        # 过滤已上传的文件和不支持的文件类型
         already_uploaded = []
+        skipped_ext = []
         pending_files = []
         for rel_path, abs_path in task_files:
+            # 检查文件类型
+            file_ext = os.path.splitext(abs_path)[1].lower()
+            if file_ext in SKIP_EXTENSIONS:
+                skipped_ext.append(rel_path)
+                continue
+            
             if success_manager.is_uploaded(abs_path):
                 already_uploaded.append(rel_path)
             else:
@@ -726,10 +865,15 @@ def do_upload(valid_tasks):
         # 记录所有文件名到日志
         log.info(f"  [{dataset_name}] -------- 文件列表开始 --------")
         for idx, (rel_path, _) in enumerate(task_files, 1):
-            status = "[已上传]" if rel_path in already_uploaded else "[待上传]"
+            if rel_path in skipped_ext:
+                status = "[跳过类型]"
+            elif rel_path in already_uploaded:
+                status = "[已上传]"
+            else:
+                status = "[待上传]"
             log.info(f"  [{dataset_name}] [{idx}] {status} {rel_path}")
         log.info(f"  [{dataset_name}] -------- 文件列表结束 --------")
-        log.info(f"  [{dataset_name}] 统计：总共 {total_scanned} 个，已上传 {len(already_uploaded)} 个，待上传 {len(pending_files)} 个")
+        log.info(f"  [{dataset_name}] 统计：总共 {total_scanned} 个，跳过类型 {len(skipped_ext)} 个，已上传 {len(already_uploaded)} 个，待上传 {len(pending_files)} 个")
         
         # 如果全部已上传，跳过该任务
         if not pending_files:
@@ -756,13 +900,25 @@ def do_upload(valid_tasks):
     with ThreadPoolExecutor(max_workers=MAX_CONCURRENT_TASKS) as task_executor:
         list(task_executor.map(process_single_task, task_infos))
     
+    # 计算总耗时
+    total_time = time.time() - stats['start_time'] if stats['start_time'] else 0
+    if total_time < 60:
+        time_str = f"{int(total_time)}秒"
+    elif total_time < 3600:
+        time_str = f"{int(total_time // 60)}分{int(total_time % 60)}秒"
+    else:
+        hours = int(total_time // 3600)
+        minutes = int((total_time % 3600) // 60)
+        time_str = f"{hours}小时{minutes}分"
+    
     # 输出总统计
-    print("\n" + "=" * 60)
+    print("\n\n" + "=" * 60)
     log.info("全部任务完成！总统计信息：")
-    log.info(f"  总文件数：{stats['total_files']}")
+    log.info(f"  待上传总数：{stats['pending_total']}")
     log.info(f"  成功上传：{stats['success_count']}")
     log.info(f"  跳过文件：{stats['skip_count']}")
     log.info(f"  失败文件：{stats['error_count']}")
+    log.info(f"  总耗时：{time_str}")
     
     if stats['error_count'] > 0:
         failed_manager.print_summary()
