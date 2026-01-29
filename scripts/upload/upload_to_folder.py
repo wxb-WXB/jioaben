@@ -84,6 +84,7 @@ UPLOAD_TASKS = [
     #     "folder_id": "d9439792-b847-4466-923b-2c5b46f2847b",
     #     "dataset_name": "08土建A6施工文件",
     # },
+    # 总数：3683
     {
         "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\09土建A7施工文件',
         "folder_id": "3a4523b1-c495-432a-b0dd-feeb60bc9600",
