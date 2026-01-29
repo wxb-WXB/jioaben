@@ -31,7 +31,7 @@ sys.path.insert(0, project_root)
 
 # 导入核心模块
 from src.core.models import FolderMap, db
-from src.config import API_KEY, API_HOST, WORKSPACES
+from src.config import API_KEY, API_HOST, WORKSPACES, AUTH_TOKEN
 
 # 设置日志
 logging.basicConfig(
@@ -42,117 +42,101 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 
-def get_folders(workspace_id: str, parent_id: str = None) -> list:
+def get_folder_tree(workspace_id: str) -> list:
     """
-    递归获取所有文件夹
+    获取文件夹树结构
     
     Args:
         workspace_id: 工作空间ID
-        parent_id: 父文件夹ID（None表示根目录）
         
     Returns:
-        list: 文件夹列表
+        list: 文件夹树
     """
-    url = f"{API_HOST}/api/v1/service/folders"
+    url = f"{API_HOST}/api/v1/console/datasets/folders/tree"
     
     params = {
         "workspace_id": workspace_id,
-        "page_size": 1000,
     }
-    if parent_id:
-        params["parent_id"] = parent_id
     
     headers = {
-        "accept": "application/json",
-        "X-API-Key": API_KEY,
+        "Authorization": f"Bearer {AUTH_TOKEN}",
+        "x-fly-tenantid": "00000000-0000-0000-0000-000000000000",
+        "x-workspace-id": workspace_id,
     }
     
     try:
         response = requests.get(url, params=params, headers=headers, timeout=60)
+        
         if response.status_code == 200:
-            data = response.json().get("data", [])
-            return data if isinstance(data, list) else []
+            data = response.json().get("data", {})
+            tree = data.get("tree", [])
+            log.info(f"  获取到文件夹树，根节点数: {len(tree)}")
+            return tree
         else:
-            log.error(f"获取文件夹列表失败: {response.status_code}")
+            log.error(f"获取文件夹树失败: {response.status_code}, {response.text[:200]}")
             return []
     except Exception as e:
         log.error(f"请求失败: {e}")
         return []
 
 
-def build_folder_path(folder: dict, all_folders: dict) -> str:
+def collect_folders_from_tree(tree: list, parent_path: str = '') -> list:
     """
-    构建文件夹的完整路径
+    从树结构中收集所有文件夹信息
     
     Args:
-        folder: 文件夹信息
-        all_folders: 所有文件夹的字典 {id: folder}
+        tree: 文件夹树
+        parent_path: 父路径
         
     Returns:
-        str: 完整路径
+        list: 文件夹列表 [{'id': ..., 'name': ..., 'path': ...}, ...]
     """
-    path_parts = [folder.get("name", "")]
-    parent_id = folder.get("parent_id")
-    
-    while parent_id and parent_id in all_folders:
-        parent = all_folders[parent_id]
-        path_parts.insert(0, parent.get("name", ""))
-        parent_id = parent.get("parent_id")
-    
-    return "/".join(path_parts)
-
-
-def scan_folders_recursive(workspace_id: str, parent_id: str = None, all_folders: dict = None) -> dict:
-    """
-    递归扫描所有文件夹
-    
-    Args:
-        workspace_id: 工作空间ID
-        parent_id: 父文件夹ID
-        all_folders: 累积的文件夹字典
+    result = []
+    for item in tree:
+        # 只处理文件夹类型
+        if item.get("type") != "folder":
+            continue
         
-    Returns:
-        dict: 所有文件夹的字典 {id: folder}
-    """
-    if all_folders is None:
-        all_folders = {}
+        name = item.get('name', '')
+        folder_id = item.get('id')
+        this_path = f"{parent_path}/{name}" if parent_path else name
+        
+        result.append({
+            'id': folder_id,
+            'name': name,
+            'path': this_path
+        })
+        
+        # 递归处理子文件夹
+        children = item.get('children', [])
+        if children:
+            result.extend(collect_folders_from_tree(children, this_path))
     
-    folders = get_folders(workspace_id, parent_id)
-    
-    for folder in folders:
-        folder_id = folder.get("id")
-        if folder_id:
-            all_folders[folder_id] = folder
-            # 递归获取子文件夹
-            scan_folders_recursive(workspace_id, folder_id, all_folders)
-    
-    return all_folders
+    return result
 
 
-def save_to_database(folders: dict):
+def save_to_database(folders: list):
     """
     保存文件夹映射到数据库
     
     Args:
-        folders: 文件夹字典 {id: folder}
+        folders: 文件夹列表 [{'id': ..., 'name': ..., 'path': ...}, ...]
     """
     # 清空现有数据
     FolderMap.delete().execute()
     
     count = 0
-    for folder_id, folder in folders.items():
-        folder_path = build_folder_path(folder, folders)
-        
+    for folder in folders:
         try:
             FolderMap.create(
-                id=folder_id,
-                name=folder.get("name", ""),
-                folderPath=folder_path
+                id=folder['id'],
+                name=folder['name'],
+                folderPath=folder['path']
             )
             count += 1
-            log.info(f"  保存: {folder_path}")
+            log.info(f"  保存: {folder['path']}")
         except Exception as e:
-            log.error(f"  保存失败 [{folder_path}]: {e}")
+            log.error(f"  保存失败 [{folder['path']}]: {e}")
     
     return count
 
@@ -163,6 +147,10 @@ def main():
     log.info(f"开始时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     log.info("=" * 60)
     
+    # 先清空数据库
+    FolderMap.delete().execute()
+    log.info("已清空现有数据")
+    
     total_count = 0
     
     for ws in WORKSPACES:
@@ -172,14 +160,30 @@ def main():
         log.info(f"\n扫描工作空间: {workspace_name}")
         log.info("-" * 40)
         
-        # 递归获取所有文件夹
-        all_folders = scan_folders_recursive(workspace_id)
-        log.info(f"找到 {len(all_folders)} 个文件夹")
+        # 获取文件夹树
+        tree = get_folder_tree(workspace_id)
+        
+        if not tree:
+            log.warning(f"  未获取到文件夹")
+            continue
+        
+        # 从树结构中收集所有文件夹
+        folders = collect_folders_from_tree(tree)
+        log.info(f"  共找到 {len(folders)} 个文件夹")
         
         # 保存到数据库
-        if all_folders:
-            count = save_to_database(all_folders)
-            total_count += count
+        if folders:
+            for folder in folders:
+                try:
+                    FolderMap.create(
+                        id=folder['id'],
+                        name=folder['name'],
+                        folderPath=folder['path']
+                    )
+                    total_count += 1
+                    log.info(f"    保存: {folder['path']}")
+                except Exception as e:
+                    log.error(f"    保存失败 [{folder['path']}]: {e}")
     
     log.info("")
     log.info("=" * 60)
