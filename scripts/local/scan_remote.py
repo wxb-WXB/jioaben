@@ -135,6 +135,17 @@ size_by_status = {
 # 按工作空间统计大小
 size_by_workspace = {}
 
+# 按文件类型统计（使用API返回的type字段）
+# 文本文件类型
+TEXT_FILE_TYPES = {'doc', 'docx', 'txt', 'md', 'wps'}
+
+# 按文件类型统计
+file_type_stats = {
+    "text": {"count": 0, "size": 0, "success": 0, "indexing": 0, "error": 0, "cancelled": 0, "no_task": 0},
+    "pdf": {"count": 0, "size": 0, "success": 0, "indexing": 0, "error": 0, "cancelled": 0, "no_task": 0},
+    "other": {"count": 0, "size": 0, "success": 0, "indexing": 0, "error": 0, "cancelled": 0, "no_task": 0},
+}
+
 dataset_success_count = {}
 dataset_indexing_count = {}
 dataset_error_count = {}
@@ -162,12 +173,25 @@ for i, ds in enumerate(datasets):
             total_docs += 1
             doc_name = doc.get("name", "未知")
             doc_size = get_doc_size(doc)
+            doc_type = doc.get("type", "")  # API返回的文件类型
             total_size += doc_size
             
             # 按工作空间统计大小
             if ws_name not in size_by_workspace:
                 size_by_workspace[ws_name] = 0
             size_by_workspace[ws_name] += doc_size
+            
+            # 判断文件类型分类
+            if doc_type in TEXT_FILE_TYPES:
+                file_category = "text"
+            elif doc_type == "pdf":
+                file_category = "pdf"
+            else:
+                file_category = "other"
+            
+            # 统计文件类型数量和大小
+            file_type_stats[file_category]["count"] += 1
+            file_type_stats[file_category]["size"] += doc_size
             
             doc_status, task_type = get_doc_status(doc)
             
@@ -176,21 +200,26 @@ for i, ds in enumerate(datasets):
             if doc_status in ["completed", "success"]:
                 ds_success += 1
                 size_by_status["success"] += doc_size
-                success_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size})
+                file_type_stats[file_category]["success"] += 1
+                success_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size, "type": doc_type})
             elif doc_status in ["indexing", "parsing", "waiting", "queuing"]:
                 ds_indexing += 1
                 size_by_status["indexing"] += doc_size
-                indexing_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "status": doc_status, "folder_path": folder_path, "workspace": ws_name, "size": doc_size})
+                file_type_stats[file_category]["indexing"] += 1
+                indexing_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "status": doc_status, "folder_path": folder_path, "workspace": ws_name, "size": doc_size, "type": doc_type})
             elif doc_status in ["error", "failed"]:
                 ds_error += 1
                 size_by_status["error"] += doc_size
-                error_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size})
+                file_type_stats[file_category]["error"] += 1
+                error_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size, "type": doc_type})
             elif doc_status == "cancelled":
                 size_by_status["cancelled"] += doc_size
-                cancelled_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size})
+                file_type_stats[file_category]["cancelled"] += 1
+                cancelled_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size, "type": doc_type})
             elif doc_status == "no_task":
                 size_by_status["no_task"] += doc_size
-                no_task_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size})
+                file_type_stats[file_category]["no_task"] += 1
+                no_task_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size, "type": doc_type})
         
         result_parts = []
         if ds_success > 0:
@@ -313,6 +342,15 @@ print(f"     已取消: {format_size(size_by_status['cancelled'])}")
 print(f"     无任务: {format_size(size_by_status['no_task'])}")
 print(f"")
 
+# 按文件类型统计
+print(f"  📁 按文件类型统计:")
+print(f"     {'类型':<8} {'总数':>8} {'大小':>12} {'成功':>8} {'进行中':>8} {'失败':>8} {'取消':>8} {'无任务':>8}")
+print(f"     {'-'*76}")
+for ftype, label in [("text", "文本"), ("pdf", "PDF"), ("other", "其他")]:
+    stats = file_type_stats[ftype]
+    print(f"     {label:<8} {stats['count']:>8} {format_size(stats['size']):>12} {stats['success']:>8} {stats['indexing']:>8} {stats['error']:>8} {stats['cancelled']:>8} {stats['no_task']:>8}")
+print(f"")
+
 # 计算耗时
 end_time = datetime.now()
 duration = end_time - start_time
@@ -353,6 +391,14 @@ log_lines.append(f"  进行中: {format_size(size_by_status['indexing'])}")
 log_lines.append(f"  失败: {format_size(size_by_status['error'])}")
 log_lines.append(f"  已取消: {format_size(size_by_status['cancelled'])}")
 log_lines.append(f"  无任务: {format_size(size_by_status['no_task'])}")
+log_lines.append("")
+
+log_lines.append("【按文件类型统计】")
+log_lines.append(f"  {'类型':<8} {'总数':>8} {'大小':>12} {'成功':>8} {'进行中':>8} {'失败':>8} {'取消':>8} {'无任务':>8}")
+log_lines.append(f"  {'-'*76}")
+for ftype, label in [("text", "文本"), ("pdf", "PDF"), ("other", "其他")]:
+    stats = file_type_stats[ftype]
+    log_lines.append(f"  {label:<8} {stats['count']:>8} {format_size(stats['size']):>12} {stats['success']:>8} {stats['indexing']:>8} {stats['error']:>8} {stats['cancelled']:>8} {stats['no_task']:>8}")
 log_lines.append("")
 
 log_lines.append("【各状态文档数量】")
