@@ -91,26 +91,29 @@ UPLOAD_TASKS = [
     #     "dataset_name": "09土建A7施工文件",
     # },
     # 总数：10460
-    {
-        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\10土建B1施工文件',
-        "folder_id": "f4b75b0f-f53c-41c6-9471-0fbc5015c9fa",
-        "dataset_name": "10土建B1施工文件",
-    },
+    # {
+    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\10土建B1施工文件',
+    #     "folder_id": "f4b75b0f-f53c-41c6-9471-0fbc5015c9fa",
+    #     "dataset_name": "10土建B1施工文件",
+    # },
+     # 总数
     #  {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\11土建B2施工文件',
     #     "folder_id": "92ef6fbe-815e-4e1d-8cc8-20ae62bd2700",
     #     "dataset_name": "11土建B2施工文件",
     # },
+     # 总数
     # {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\12土建B3施工文件',
     #     "folder_id": "b85d37f0-6a79-4948-984c-e4f92716bbcb",
     #     "dataset_name": "12土建B3施工文件",
     # },
-    #  {
-    #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\13土建B4施工文件',
-    #     "folder_id": "a832949d-6946-40fc-b326-a5d94504e218",
-    #     "dataset_name": "13土建B4施工文件",
-    # },
+    # 总数：:14569  -暂停 先不传
+     {
+        "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\13土建B4施工文件',
+        "folder_id": "a832949d-6946-40fc-b326-a5d94504e218",
+        "dataset_name": "13土建B4施工文件",
+    },
     #  {
     #     "local_folder": r'E:\环北部湾广东水资源配置工程\B项目档案\B1环北部湾广东水资源配置工程\B1.2施工管理\14土建C1施工文件',
     #     "folder_id": "f7a3d711-f03f-46c3-bbd2-72c7c8d10197",
@@ -188,6 +191,11 @@ UPLOAD_TASKS = [
 # "upload" - 直接上传（跳过已上传的文件）
 # "both"   - 先检查，确认后再上传
 RUN_MODE = "upload"
+
+# 是否启用向量化
+# True  - 上传后自动创建向量化任务
+# False - 只上传文件，不进行向量化
+ENABLE_VECTORIZATION = False
 # ==================================
 
 # 确保logs文件夹存在（LOGS_DIR已经是完整路径）
@@ -548,40 +556,44 @@ def process_file(file_info):
     new_doc_id = new_doc[0].get("id")
     thread_log.info(f"文档创建成功：{rel_path}，文档ID={new_doc_id}")
     
-    is_pdf = is_pdf_file(abs_path)
-    if SKIP_IMAGE_CHECK:
-        has_img = False
-    else:
-        try:
-            has_img = pdf_has_images(abs_path) if is_pdf else False
-        except:
+    # 根据配置决定是否创建向量化任务
+    if ENABLE_VECTORIZATION:
+        is_pdf = is_pdf_file(abs_path)
+        if SKIP_IMAGE_CHECK:
             has_img = False
-    
-    response_code, task_response = lingyan_dataset.create_task(
-        dataset_id,
-        new_doc_id,
-        image_task=has_img,
-        parse_enhance=is_pdf
-    )
-    
-    if response_code != 200:
-        thread_log.error(f"创建任务失败：{rel_path}，{response_code}, {task_response}")
-        failed_manager.add_record(
-            file_path=abs_path,
-            file_name=file_name,
-            file_classify=dataset_name,
-            error_stage=FailedRecord.STAGE_CREATE_TASK,
-            error_message=f"创建任务失败：{response_code}, {task_response}",
-            error_code=response_code,
-            dataset_name=dataset_name,
-            folder_id=folder_id,
-            dataset_id=dataset_id,
+        else:
+            try:
+                has_img = pdf_has_images(abs_path) if is_pdf else False
+            except:
+                has_img = False
+        
+        response_code, task_response = lingyan_dataset.create_task(
+            dataset_id,
+            new_doc_id,
+            image_task=has_img,
+            parse_enhance=is_pdf
         )
-        with stats_lock:
-            stats['error_count'] += 1
-            stats['processed_count'] += 1
-            _print_progress()
-        return
+        
+        if response_code != 200:
+            thread_log.error(f"创建任务失败：{rel_path}，{response_code}, {task_response}")
+            failed_manager.add_record(
+                file_path=abs_path,
+                file_name=file_name,
+                file_classify=dataset_name,
+                error_stage=FailedRecord.STAGE_CREATE_TASK,
+                error_message=f"创建任务失败：{response_code}, {task_response}",
+                error_code=response_code,
+                dataset_name=dataset_name,
+                folder_id=folder_id,
+                dataset_id=dataset_id,
+            )
+            with stats_lock:
+                stats['error_count'] += 1
+                stats['processed_count'] += 1
+                _print_progress()
+            return
+    else:
+        thread_log.info(f"跳过向量化（已禁用）：{rel_path}")
     
     failed_manager.remove_record(abs_path)
     success_manager.add_record(
