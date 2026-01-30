@@ -48,6 +48,21 @@ SIZE_RANGES = [
 # 最小文件大小（字节），小于此值的文件不处理（0K文件）
 MIN_FILE_SIZE_BYTES = 1024  # 1KB
 
+# 允许处理的文件类型（扩展名，不带点，小写）
+# 只有在此列表中的文件类型才会被向量化
+# 设为空列表 [] 表示不限制文件类型，处理所有文件
+ALLOWED_EXTENSIONS = [
+    "doc",
+    "docx",
+    # "pdf",
+    "txt",
+    # "md",
+    # "xlsx",
+    # "xls",
+    # "ppt",
+    # "pptx",
+]
+
 # 批量配置
 MAX_RUNNING_TASKS = 20   # 保持同时运行的任务数量
 CHECK_INTERVAL = 30      # 检查任务状态的间隔（秒）
@@ -125,6 +140,22 @@ def get_size_range_label(size_mb):
         if min_mb <= size_mb < max_mb:
             return label
     return "未知"
+
+
+def is_allowed_extension(doc_name):
+    """
+    检查文件扩展名是否在允许列表中
+    如果 ALLOWED_EXTENSIONS 为空列表，则允许所有文件
+    """
+    if not ALLOWED_EXTENSIONS:
+        return True
+    
+    if not doc_name:
+        return False
+    
+    # 获取文件扩展名（小写，不带点）
+    ext = doc_name.lower().rsplit('.', 1)[-1] if '.' in doc_name else ''
+    return ext in ALLOWED_EXTENSIONS
 
 
 def get_file_type_priority(doc_name):
@@ -306,6 +337,11 @@ def main():
     log.info("按文件大小分批开始向量化任务")
     log.info("="*60)
     
+    if ALLOWED_EXTENSIONS:
+        log.info(f"只处理以下文件类型: {', '.join(ALLOWED_EXTENSIONS)}")
+    else:
+        log.info("处理所有文件类型（无限制）")
+    
     if DRY_RUN:
         log.info("【测试模式】只统计不执行")
     
@@ -356,6 +392,12 @@ def main():
                 if size_bytes < MIN_FILE_SIZE_BYTES:
                     stats['skipped_count'] += 1
                     log.debug(f"跳过0K文件: {doc_name} ({size_bytes} bytes)")
+                    continue
+                
+                # 检查文件类型是否在允许列表中
+                if not is_allowed_extension(doc_name):
+                    stats['skipped_count'] += 1
+                    log.debug(f"跳过非指定类型文件: {doc_name}")
                     continue
                 
                 # 检查是否需要向量化
