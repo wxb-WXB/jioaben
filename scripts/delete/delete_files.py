@@ -43,7 +43,7 @@ log = logging.getLogger("delete_files")
 
 # ===================== 配置区域 =====================
 # 要删除的文件类型列表（注意：不带点，如 "png" 而不是 ".png"）
-FILE_TYPES_TO_DELETE = ["lnk","png", "zip", "jpg", "jpeg", "mp4", "dwg", "htm", "ico", "css", "pdg", "dat", "xml","dwf"]
+FILE_TYPES_TO_DELETE = ["lnk","png", "zip", "jpg", "jpeg", "mp4", "dwg", "htm", "ico", "css", "pdg", "dat", "xml","dwf","heic"]
 
 # 是否删除 file_size 为 0 的文件
 DELETE_ZERO_SIZE = False

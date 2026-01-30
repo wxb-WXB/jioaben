@@ -1,16 +1,14 @@
 # -*- coding: utf-8 -*-
 """
-失败文档重试脚本 - 定时启动向量化任务
+失败文档重试脚本 - 批次模式
 
 功能：
 - 遍历知识库，检测失败/无任务的文档
-- 优先处理文本文件（txt, doc, docx, md等）
-- 使用普通切割模式（关闭语义切割）
-- 扫描到失败文档后立即启动处理
-- 每次启动指定数量的任务后暂停等待，避免服务器压力过大
+- 边扫边处理：扫描到失败文档后立即启动
+- 批次模式：每次启动N个任务，等待一段时间，继续下一批
 
 使用方法：
-python scripts/vector/retry_failed_tasks.py
+python scripts/generate/retry_failed_tasks.py
 """
 import sys
 import time
@@ -31,33 +29,55 @@ from src.core.models import FolderMap
 from src.config import API_KEY, WORKSPACES
 
 # ============================================================
-# 配置参数
+# 配置参数 - 修改这里来控制脚本行为
 # ============================================================
 
-# workspace ID 配置 (workspace_id, workspace_name)
+# workspace ID 配置
 workspace_ids = [(ws["id"], ws["name"]) for ws in WORKSPACES]
-# 或者手动指定：
-# workspace_ids = [
-#     ("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "环北知识库"),
-#     ("2f6118d7-20c5-48fd-8c44-b34bfab1ac30", "第二个知识库"),
-# ]
 
-# 只处理指定目录下的知识库（为空则处理所有目录）
-TARGET_FOLDER_PATH = None  # 设置为 None 或 "" 则处理所有目录
+# 只处理指定目录下的知识库
+TARGET_FOLDER_PATH = None
 
-# 每批处理的文档数量
-BATCH_SIZE = 20
+# ------------------------------
+# 批次控制
+# ------------------------------
+BATCH_SIZE = 50          # 每批启动的任务数
+BATCH_WAIT = 30          # 每批完成后等待时间（秒）
+REQUEST_INTERVAL = 0.3   # 每次启动任务之间的间隔（秒）
 
-# 每批处理完后等待的时间（秒）
-WAIT_TIME = 90
+# ------------------------------
+# 网络重试控制
+# ------------------------------
+MAX_RETRIES = 3          # 网络错误最大重试次数
+RETRY_DELAY = 5          # 重试间隔（秒）
 
-# API返回的文本文件类型（type字段）
-TEXT_FILE_TYPES = {'doc', 'docx', 'txt', 'md', 'wps'}
+# ------------------------------
+# 文件类型过滤
+# ------------------------------
+INCLUDE_FILE_TYPES = {'doc', 'docx', 'txt', 'md', 'wps'}
+# INCLUDE_FILE_TYPES = {'pdf'}
+# INCLUDE_FILE_TYPES = None  # 处理所有类型
 
+EXCLUDE_FILE_TYPES = None
+
+# ------------------------------
+# 文档状态过滤
+# ------------------------------
+RETRY_STATUS = ['error', 'failed', 'cancelled', 'no_task']
+
+# ------------------------------
+# 向量化任务配置
+# ------------------------------
+SPLIT_MODE = 'common'    # 'common'(普通切割) 或 'semantic'(语义切割)
+PARSE_ENHANCE = False    # 是否开启精准解析
+IMAGE_TASK = False       # 是否处理图片任务
+
+# ============================================================
+# 以下为脚本逻辑
 # ============================================================
 
 dataset_api = LingyanDataset(API_KEY)
-    
+
 
 def get_folder_path(folder_id):
     """根据 folder_id 获取文件夹路径"""
@@ -73,14 +93,11 @@ def get_folder_path(folder_id):
 
 
 def get_doc_status(doc):
-    """
-    从文档的 tasks 字段获取向量化任务状态
-    """
+    """从文档的 tasks 字段获取向量化任务状态"""
     tasks = doc.get("tasks", [])
     if not tasks:
         return "no_task", None
     
-    # 优先查找 type=normal 的任务（这是向量化任务）
     normal_task = None
     for task in tasks:
         if task.get("type") == "normal":
@@ -94,146 +111,75 @@ def get_doc_status(doc):
         return latest_task.get("status", "unknown"), latest_task.get("type")
 
 
-def retry_single_doc(doc, batch_num, batch_pos, workspace_id):
-    """重试单个文档"""
-    doc_name = doc['document_name']
-    doc_type = doc.get('doc_type', '')
-    folder_path = doc['folder_path']
-    
-    # 构建完整文件路径
-    if folder_path and folder_path != "根目录":
-        full_path = f"{folder_path}/{doc['dataset_name']}/{doc_name}"
-    else:
-        full_path = f"{doc['dataset_name']}/{doc_name}"
-    
-    print(f"\n[批次{batch_num}][{batch_pos}/{BATCH_SIZE}] 重试文档: {doc_name} [type={doc_type}]")
-    print(f"  文件路径: {full_path}")
-    print(f"  知识库: {doc['dataset_name']}")
-    print(f"  文档ID: {doc['document_id']}")
-    
-    try:
-        # 使用普通切割模式（common），关闭语义切割（semantic）
-        # parse_enhance=False 关闭增强解析
-        status, result = dataset_api.create_task(
-            dataset_id=doc['dataset_id'],
-            document_id=doc['document_id'],
-            split_mode="common",  # 普通切割，不使用语义切割
-            task_type="normal",
-            image_task=False,
-            parse_enhance=False,  # 关闭增强解析
-            workspace_id=workspace_id
-        )
-        
-        if status == 200:
-            print(f"  ✓ 任务创建成功")
-            return True
-        else:
-            print(f"  ✗ 任务创建失败: {result}")
-            return False
-            
-    except Exception as e:
-        print(f"  ✗ 出错: {e}")
+def should_process_file(doc_type):
+    """判断是否应该处理该文件类型"""
+    if EXCLUDE_FILE_TYPES and doc_type in EXCLUDE_FILE_TYPES:
         return False
+    if INCLUDE_FILE_TYPES:
+        return doc_type in INCLUDE_FILE_TYPES
+    return True
 
 
-def scan_and_retry(workspace_id, workspace_name):
-    """
-    扫描知识库，发现失败文档后立即处理
-    优先处理文本文件，每处理完指定数量文档后暂停等待
-    """
-    print(f"\n正在扫描 [{workspace_name}] 的知识库...")
-    status, datasets = dataset_api.list_datasets(workspace_id)
-    
-    if status != 200:
-        print(f"获取知识库列表失败: {datasets}")
-        return 0, 0
-    
-    print(f"找到 {len(datasets)} 个知识库")
-    
-    total_success = 0
-    total_fail = 0
-    batch_count = 0  # 当前批次已处理数量
-    batch_num = 1
-    
-    for i, ds in enumerate(datasets):
-        dataset_id = ds.get("id")
-        dataset_name = ds.get("name")
-        folder_id = ds.get("folder_id")
-        folder_path = get_folder_path(folder_id)
-        
-        # 如果设置了目录过滤，则跳过不匹配的目录
-        if TARGET_FOLDER_PATH and TARGET_FOLDER_PATH not in folder_path:
-            continue
-        
-        print(f"\n[{i+1}/{len(datasets)}] 检查知识库: {dataset_name}")
-        print(f"  目录路径: {folder_path}")
-        
+def list_documents_with_retry(dataset_id, workspace_id):
+    """带重试的获取文档列表"""
+    for attempt in range(MAX_RETRIES):
         try:
             status, documents = dataset_api.list_documents(dataset_id, workspace_id)
-            if status != 200:
-                print(f"  获取文档失败")
-                continue
-            
-            # 收集该知识库中的失败文档，按文本优先排序
-            failed_in_ds = []
-            for doc in documents:
-                doc_status, _ = get_doc_status(doc)
-                
-                # 检测失败、错误、取消、或者没有任务的文档
-                if doc_status in ["error", "failed", "cancelled", "no_task"]:
-                    doc_name = doc.get("name", "")
-                    doc_type = doc.get("type", "")  # API返回的文件类型
-                    
-                    # 只处理文本文件，使用API返回的type字段判断
-                    if doc_type not in TEXT_FILE_TYPES:
-                        continue
-                    
-                    failed_in_ds.append({
-                        "dataset_id": dataset_id,
-                        "dataset_name": dataset_name,
-                        "document_id": doc.get("id"),
-                        "document_name": doc_name,
-                        "doc_type": doc_type,
-                        "workspace": workspace_name,
-                        "folder_path": folder_path,
-                    })
-            
-            if len(failed_in_ds) == 0:
-                print(f"  无需处理的文档，继续扫描...")
-                continue
-            
-            # 按文件名排序
-            failed_in_ds.sort(key=lambda x: x['document_name'])
-            
-            print(f"  发现 {len(failed_in_ds)} 个待处理文本文件（失败/取消/无任务），立即处理...")
-            
-            # 立即处理这些失败文档
-            for doc in failed_in_ds:
-                batch_count += 1
-                
-                # 处理文档
-                if retry_single_doc(doc, batch_num, batch_count, workspace_id):
-                    total_success += 1
-                else:
-                    total_fail += 1
-                
-                # 如果当前批次满了，暂停等待
-                if batch_count >= BATCH_SIZE:
-                    print(f"\n{'='*60}")
-                    print(f"第 {batch_num} 批完成（成功: {total_success}, 失败: {total_fail}）")
-                    print(f"等待 {WAIT_TIME} 秒后继续...")
-                    print(f"{'='*60}")
-                    time.sleep(WAIT_TIME)
-                    
-                    batch_num += 1
-                    batch_count = 0
-            
-            print(f"\n  知识库 [{dataset_name}] 处理完成")
-                
+            if status == 200:
+                return status, documents
+            return status, documents
         except Exception as e:
-            print(f"  出错: {e}")
+            if attempt < MAX_RETRIES - 1:
+                wait_time = RETRY_DELAY * (attempt + 1)
+                print(f" - 网络错误，{wait_time}秒后重试({attempt+1}/{MAX_RETRIES})...")
+                time.sleep(wait_time)
+            else:
+                raise e
+    return 500, "重试失败"
+
+
+def start_task(doc, workspace_id):
+    """启动单个文档的向量化任务"""
+    for attempt in range(MAX_RETRIES):
+        try:
+            status, result = dataset_api.create_task(
+                dataset_id=doc['dataset_id'],
+                document_id=doc['document_id'],
+                split_mode=SPLIT_MODE,
+                task_type="normal",
+                image_task=IMAGE_TASK,
+                parse_enhance=PARSE_ENHANCE,
+                workspace_id=workspace_id
+            )
+            return status == 200, result
+        except Exception as e:
+            if attempt < MAX_RETRIES - 1:
+                wait_time = RETRY_DELAY * (attempt + 1)
+                print(f"    网络错误，{wait_time}秒后重试({attempt+1}/{MAX_RETRIES})...")
+                time.sleep(wait_time)
+            else:
+                return False, str(e)
+    return False, "重试失败"
+
+
+def print_config():
+    """打印当前配置"""
+    print("="*60)
+    print("当前配置:")
+    print("="*60)
+    print(f"  批次大小: {BATCH_SIZE}")
+    print(f"  批次等待: {BATCH_WAIT} 秒")
+    print(f"  请求间隔: {REQUEST_INTERVAL} 秒")
+    print(f"  切割模式: {SPLIT_MODE}")
+    print(f"  精准解析: {'开启' if PARSE_ENHANCE else '关闭'}")
     
-    return total_success, total_fail
+    if INCLUDE_FILE_TYPES:
+        print(f"  处理文件类型: {', '.join(sorted(INCLUDE_FILE_TYPES))}")
+    else:
+        print(f"  处理文件类型: 全部")
+    
+    print(f"  重试状态: {', '.join(RETRY_STATUS)}")
+    print("="*60)
 
 
 def main():
@@ -242,39 +188,157 @@ def main():
     start_time = datetime.now()
     
     print("="*60)
-    print(f"失败/无任务文档重试工具 - {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
-    print("  - 只处理文本文件（txt, doc, docx, md等）")
-    print("  - 扫描到失败文档后立即处理")
-    print("  - 使用普通切割模式（关闭语义切割）")
-    print(f"  - 每批处理 {BATCH_SIZE} 个文档，每批间隔 {WAIT_TIME} 秒")
-    if TARGET_FOLDER_PATH:
-        print(f"  - 目标目录过滤: {TARGET_FOLDER_PATH}")
+    print(f"失败/无任务文档重试工具（批次模式）")
+    print(f"开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print("="*60)
     
+    print_config()
+    
+    # 统计
     total_success = 0
     total_fail = 0
+    total_started = 0
+    batch_num = 1
+    batch_count = 0  # 当前批次已启动数量
     
+    # 记录成功和失败的文档
+    success_docs = []
+    failed_docs = []
+    
+    # 遍历所有工作空间
     for ws_id, ws_name in workspace_ids:
-        success, fail = scan_and_retry(ws_id, ws_name)
-        total_success += success
-        total_fail += fail
+        print(f"\n正在扫描 [{ws_name}] 的知识库...")
+        
+        try:
+            status, datasets = dataset_api.list_datasets(ws_id)
+        except Exception as e:
+            print(f"获取知识库列表失败: {e}")
+            continue
+        
+        if status != 200:
+            print(f"获取知识库列表失败: {datasets}")
+            continue
+        
+        print(f"找到 {len(datasets)} 个知识库")
+        
+        for i, ds in enumerate(datasets):
+            dataset_id = ds.get("id")
+            dataset_name = ds.get("name")
+            folder_id = ds.get("folder_id")
+            folder_path = get_folder_path(folder_id)
+            
+            if TARGET_FOLDER_PATH and TARGET_FOLDER_PATH not in folder_path:
+                continue
+            
+            print(f"\n[{i+1}/{len(datasets)}] 扫描知识库: {dataset_name}")
+            
+            try:
+                status, documents = list_documents_with_retry(dataset_id, ws_id)
+                if status != 200:
+                    print(f"  获取文档失败")
+                    continue
+                
+                found_count = 0
+                for doc in documents:
+                    doc_status, _ = get_doc_status(doc)
+                    
+                    if doc_status not in RETRY_STATUS:
+                        continue
+                    
+                    doc_name = doc.get("name", "")
+                    doc_type = doc.get("type", "")
+                    
+                    if not should_process_file(doc_type):
+                        continue
+                    
+                    found_count += 1
+                    total_started += 1
+                    batch_count += 1
+                    
+                    # 构建路径
+                    if folder_path and folder_path != "根目录":
+                        full_path = f"{folder_path}/{dataset_name}/{doc_name}"
+                    else:
+                        full_path = f"{dataset_name}/{doc_name}"
+                    
+                    print(f"\n  [批次{batch_num}][{batch_count}/{BATCH_SIZE}] 启动: {doc_name} [type={doc_type}]")
+                    print(f"    路径: {full_path}")
+                    
+                    # 启动任务
+                    success, result = start_task({
+                        'dataset_id': dataset_id,
+                        'document_id': doc.get("id"),
+                    }, ws_id)
+                    
+                    if success:
+                        print(f"    ✓ 成功")
+                        total_success += 1
+                        success_docs.append({
+                            'name': doc_name,
+                            'path': full_path,
+                            'type': doc_type,
+                        })
+                    else:
+                        print(f"    ✗ 失败: {result}")
+                        total_fail += 1
+                        failed_docs.append({
+                            'name': doc_name,
+                            'path': full_path,
+                            'type': doc_type,
+                            'error': str(result),
+                        })
+                    
+                    # 请求间隔
+                    time.sleep(REQUEST_INTERVAL)
+                    
+                    # 批次满了，等待
+                    if batch_count >= BATCH_SIZE:
+                        print(f"\n{'='*60}")
+                        print(f"第 {batch_num} 批完成！成功: {total_success}, 失败: {total_fail}")
+                        print(f"等待 {BATCH_WAIT} 秒后继续...")
+                        print(f"{'='*60}")
+                        time.sleep(BATCH_WAIT)
+                        batch_num += 1
+                        batch_count = 0
+                
+                if found_count > 0:
+                    print(f"\n  知识库 [{dataset_name}] 处理了 {found_count} 个文档")
+                else:
+                    print(f"  无需处理")
+                    
+            except Exception as e:
+                print(f"  出错: {e}")
+                time.sleep(RETRY_DELAY)
     
     end_time = datetime.now()
     duration = end_time - start_time
     duration_str = str(duration).split('.')[0]
     
+    # 最终统计
     print(f"\n{'='*60}")
     print(f"全部完成！")
     print(f"{'='*60}")
     print(f"  开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  结束时间: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  总耗时: {duration_str}")
-    print(f"  处理总数: {total_success + total_fail}")
+    print(f"  启动任务数: {total_started}")
     print(f"  成功: {total_success}")
     print(f"  失败: {total_fail}")
-    if total_success + total_fail > 0:
-        success_rate = total_success / (total_success + total_fail) * 100
+    if total_started > 0:
+        success_rate = total_success / total_started * 100
         print(f"  成功率: {success_rate:.1f}%")
+    
+    # 显示失败列表
+    if failed_docs:
+        print(f"\n{'='*60}")
+        print(f"失败文档列表 ({len(failed_docs)} 个):")
+        print(f"{'='*60}")
+        for doc in failed_docs[:50]:
+            print(f"  {doc['path']}")
+            print(f"    错误: {doc['error']}")
+        if len(failed_docs) > 50:
+            print(f"  ... 还有 {len(failed_docs) - 50} 个")
+    
     print(f"{'='*60}")
 
 
