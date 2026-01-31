@@ -91,6 +91,40 @@ def is_vector_success(doc):
     return doc_status in ["completed", "success"]
 
 
+def get_document_segments_count(dataset_id, document_id):
+    """获取文档的分段数量"""
+    url = f"http://10.4.49.66:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}/segments"
+    
+    params = {
+        "dataset_id": dataset_id,
+        "document_id": document_id,
+        "page": 1,
+        "page_size": 1  # 只需要获取total，不需要全部数据
+    }
+    
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Authorization": f"Bearer {AUTH_TOKEN}",
+        "X-Workspace-Id": WORKSPACE_ID,
+        "x-fly-tenantid": "00000000-0000-0000-0000-000000000000",
+    }
+    
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=30, verify=False)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("code") == 200:
+                data = result.get("data", {})
+                if isinstance(data, dict):
+                    return data.get("total", 0)
+                elif isinstance(data, list):
+                    return len(data)
+        return 0
+    except Exception as e:
+        return 0
+
+
 def get_faq_task_status(doc):
     """获取文档的FAQ任务状态"""
     tasks = doc.get("tasks", [])
@@ -224,6 +258,7 @@ def process_sliding_window(dataset_id, dataset_name, folder_path, docs_to_proces
                 fail_count += 1
                 processed_count += 1
                 log.warning(f"    [{processed_count}/{total_docs}] 启动失败: [{folder_path}] {document_name[:40]}...")
+                log.warning(f"      错误详情: {message}")
             
             time.sleep(REQUEST_INTERVAL)
         
@@ -309,7 +344,7 @@ def scan_and_process(workspace_id, workspace_name):
                 log.error(f"  获取文档失败")
                 continue
             
-            docs_to_process = []
+            candidate_docs = []
             ds_skip_completed = 0
             ds_skip_running = 0
             
@@ -327,17 +362,33 @@ def scan_and_process(workspace_id, workspace_name):
                         ds_skip_running += 1
                         continue
                 
-                docs_to_process.append({
+                candidate_docs.append({
                     "document_id": doc.get("id"),
                     "document_name": doc.get("name"),
                 })
-            
-            total_skip += ds_skip_completed
             
             if ds_skip_completed > 0:
                 log.info(f"  已完成FAQ: {ds_skip_completed} 个(跳过)")
             if ds_skip_running > 0:
                 log.info(f"  进行中FAQ: {ds_skip_running} 个(跳过)")
+            
+            # 检查分段数量，只有有分段的文档才处理
+            docs_to_process = []
+            ds_skip_empty = 0
+            
+            if candidate_docs:
+                log.info(f"  检查 {len(candidate_docs)} 个候选文档的分段数量...")
+                for doc_info in candidate_docs:
+                    segment_count = get_document_segments_count(dataset_id, doc_info['document_id'])
+                    if segment_count > 0:
+                        docs_to_process.append(doc_info)
+                    else:
+                        ds_skip_empty += 1
+            
+            total_skip += ds_skip_completed + ds_skip_empty
+            
+            if ds_skip_empty > 0:
+                log.info(f"  无分段文档: {ds_skip_empty} 个(跳过)")
             
             if len(docs_to_process) == 0:
                 if ds_skip_completed == 0 and ds_skip_running == 0:

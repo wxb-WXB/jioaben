@@ -6,6 +6,7 @@
 - 扫描知识库中向量化成功的文档
 - 检查文档是否有分段内容
 - 如果向量化成功但分段为空，则重新向量化
+- 记录空分段文档到日志，下次启动时优先处理
 
 使用方法：
 python scripts/fix/retry_empty_docs.py
@@ -13,7 +14,9 @@ python scripts/fix/retry_empty_docs.py
 import sys
 import time
 import os
+import json
 import requests
+from datetime import datetime
 
 # 设置控制台编码
 if sys.platform == 'win32':
@@ -63,6 +66,11 @@ EXCLUDE_FILE_TYPES = None
 SPLIT_MODE = 'common'    # 'common'(普通切割) 或 'semantic'(语义切割)
 PARSE_ENHANCE = False    # 是否开启精准解析
 IMAGE_TASK = False       # 是否处理图片任务
+
+# ------------------------------
+# 日志文件配置
+# ------------------------------
+EMPTY_DOCS_LOG_FILE = "logs/empty_docs_pending.json"  # 待处理的空分段文档记录
 
 # ============================================================
 # 以下为脚本逻辑
@@ -196,6 +204,48 @@ def start_vector_task(dataset_id, document_id, workspace_id):
     return False, "重试失败"
 
 
+def get_log_file_path():
+    """获取日志文件的完整路径"""
+    return os.path.join(project_root, EMPTY_DOCS_LOG_FILE)
+
+
+def load_pending_docs():
+    """加载待处理的空分段文档列表"""
+    log_file = get_log_file_path()
+    if os.path.exists(log_file):
+        try:
+            with open(log_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                return data.get('pending_docs', [])
+        except Exception as e:
+            print(f"加载待处理文档日志失败: {e}")
+    return []
+
+
+def save_pending_docs(docs):
+    """保存待处理的空分段文档列表"""
+    log_file = get_log_file_path()
+    # 确保目录存在
+    os.makedirs(os.path.dirname(log_file), exist_ok=True)
+    try:
+        data = {
+            'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+            'count': len(docs),
+            'pending_docs': docs
+        }
+        with open(log_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=2)
+        print(f"已保存 {len(docs)} 个待处理文档到 {EMPTY_DOCS_LOG_FILE}")
+    except Exception as e:
+        print(f"保存待处理文档日志失败: {e}")
+
+
+def remove_from_pending(pending_docs, dataset_id, document_id):
+    """从待处理列表中移除已处理的文档"""
+    return [doc for doc in pending_docs 
+            if not (doc['dataset_id'] == dataset_id and doc['document_id'] == document_id)]
+
+
 def print_config():
     """打印当前配置"""
     print("="*60)
@@ -214,9 +264,34 @@ def print_config():
     print("="*60)
 
 
-def main():
-    from datetime import datetime
+def process_single_doc(doc_info, workspace_id, batch_num, batch_count, stats):
+    """处理单个文档的向量化任务"""
+    dataset_id = doc_info['dataset_id']
+    doc_id = doc_info['document_id']
+    doc_name = doc_info['name']
+    doc_type = doc_info.get('type', '')
+    full_path = doc_info['path']
     
+    print(f"\n  [批次{batch_num}][{batch_count}/{BATCH_SIZE}] 重新向量化: {doc_name} [type={doc_type}]")
+    print(f"    路径: {full_path}")
+    
+    success, result = start_vector_task(dataset_id, doc_id, workspace_id)
+    
+    if success:
+        print(f"    ✓ 成功")
+        stats['success'] += 1
+        return True, None
+    else:
+        print(f"    ✗ 失败: {result}")
+        stats['fail'] += 1
+        return False, {
+            'name': doc_name,
+            'path': full_path,
+            'error': str(result),
+        }
+
+
+def main():
     start_time = datetime.now()
     
     print("="*60)
@@ -243,6 +318,78 @@ def main():
     workspace_id = WORKSPACE_ID
     workspace_name = WORKSPACE_NAME
     
+    # ============================================================
+    # 第一阶段：优先处理上次记录的待处理文档
+    # ============================================================
+    pending_docs = load_pending_docs()
+    if pending_docs:
+        print(f"\n{'='*60}")
+        print(f"发现 {len(pending_docs)} 个上次记录的待处理文档，优先处理...")
+        print(f"{'='*60}")
+        
+        stats = {'success': 0, 'fail': 0}
+        still_pending = []  # 仍然需要处理的文档（仍为空分段）
+        
+        for i, doc_info in enumerate(pending_docs):
+            # 先检查该文档是否仍然是空分段
+            dataset_id = doc_info['dataset_id']
+            doc_id = doc_info['document_id']
+            doc_name = doc_info['name']
+            
+            print(f"\n[{i+1}/{len(pending_docs)}] 检查: {doc_name}")
+            
+            success, segments, total = get_document_segments(dataset_id, doc_id)
+            
+            if not success:
+                print(f"  获取分段失败，保留在待处理列表")
+                still_pending.append(doc_info)
+                continue
+            
+            if total > 0:
+                print(f"  已有 {total} 个分段，从待处理列表移除")
+                continue
+            
+            # 仍然是空分段，启动向量化
+            total_started += 1
+            batch_count += 1
+            
+            proc_success, failed_info = process_single_doc(
+                doc_info, workspace_id, batch_num, batch_count, stats
+            )
+            
+            if proc_success:
+                total_success += 1
+            else:
+                total_fail += 1
+                if failed_info:
+                    failed_docs.append(failed_info)
+                still_pending.append(doc_info)  # 失败的保留在待处理列表
+            
+            # 批次满了，等待
+            if batch_count >= BATCH_SIZE:
+                print(f"\n{'='*60}")
+                print(f"第 {batch_num} 批完成！成功: {total_success}, 失败: {total_fail}")
+                print(f"等待 {BATCH_WAIT} 秒后继续...")
+                print(f"{'='*60}")
+                time.sleep(BATCH_WAIT)
+                batch_num += 1
+                batch_count = 0
+        
+        # 更新待处理文档日志
+        if still_pending:
+            save_pending_docs(still_pending)
+        else:
+            # 清空日志文件
+            save_pending_docs([])
+            print("所有待处理文档已处理完毕")
+        
+        print(f"\n{'='*60}")
+        print(f"待处理文档处理完成: 成功 {stats['success']}, 失败 {stats['fail']}")
+        print(f"{'='*60}")
+    
+    # ============================================================
+    # 第二阶段：扫描知识库发现新的空分段文档
+    # ============================================================
     print(f"\n正在扫描 [{workspace_name}] 的知识库...")
     
     try:
@@ -400,6 +547,23 @@ def main():
             print(f"    错误: {doc['error']}")
         if len(failed_docs) > 50:
             print(f"  ... 还有 {len(failed_docs) - 50} 个")
+    
+    # 保存本次发现的空内容文档到待处理日志（供下次启动时优先处理）
+    if empty_docs:
+        # 合并之前仍待处理的文档
+        existing_pending = load_pending_docs()
+        existing_ids = {(d['dataset_id'], d['document_id']) for d in existing_pending}
+        
+        # 添加本次新发现的空内容文档（去重）
+        new_pending = list(existing_pending)
+        for doc in empty_docs:
+            doc_key = (doc['dataset_id'], doc['document_id'])
+            if doc_key not in existing_ids:
+                new_pending.append(doc)
+        
+        if new_pending:
+            save_pending_docs(new_pending)
+            print(f"\n已记录 {len(new_pending)} 个空内容文档到待处理日志，下次启动时将优先处理")
     
     print(f"{'='*60}")
 

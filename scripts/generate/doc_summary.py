@@ -36,6 +36,7 @@ from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACE_NAME, LLM_CO
 REQUEST_INTERVAL = 3  # 每个请求成功后等待的时间（秒）
 MAX_RETRIES = 1       # 单个文档最大重试次数
 RETRY_INTERVAL = 2    # 重试间隔（秒）
+SEGMENT_CHECK_INTERVAL = 0.5  # 每次检查分段之间的间隔（秒）
 # ============== 配置结束 ==============
 
 # 设置日志
@@ -112,6 +113,41 @@ def is_skip_error(error_msg):
         if keyword.lower() in error_lower:
             return True
     return False
+
+
+def get_document_segments_count(dataset_id, document_id):
+    """获取文档的分段数量"""
+    url = f"http://10.4.49.66:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}/segments"
+    
+    params = {
+        "dataset_id": dataset_id,
+        "document_id": document_id,
+        "page": 1,
+        "page_size": 1  # 只需要获取total，不需要全部数据
+    }
+    
+    headers = {
+        "Accept": "application/json, text/plain, */*",
+        "Authorization": f"Bearer {AUTH_TOKEN}",
+        "X-Workspace-Id": WORKSPACE_ID,
+        "x-fly-tenantid": "00000000-0000-0000-0000-000000000000",
+    }
+    
+    try:
+        response = requests.get(url, params=params, headers=headers, timeout=30, verify=False)
+        
+        if response.status_code == 200:
+            result = response.json()
+            if result.get("code") == 200:
+                data = result.get("data", {})
+                if isinstance(data, dict):
+                    return data.get("total", 0)
+                elif isinstance(data, list):
+                    return len(data)
+        return 0
+    except Exception as e:
+        log.warning(f"获取分段数量失败: {e}")
+        return 0
 
 
 def generate_summary(dataset_id, document_id, document_name):
@@ -290,6 +326,17 @@ def scan_and_generate(workspace_id, workspace_name):
             for idx, doc_info in enumerate(docs_to_process, 1):
                 log.info(f"  [{idx}/{len(docs_to_process)}] [{folder_path}] {doc_info['document_name']}")
                 log.info(f"    知识库: {dataset_name} | 文档ID: {doc_info['document_id']}")
+                
+                # 检查文档是否有分段
+                segment_count = get_document_segments_count(
+                    doc_info['dataset_id'],
+                    doc_info['document_id']
+                )
+                time.sleep(SEGMENT_CHECK_INTERVAL)
+                if segment_count == 0:
+                    log.warning(f"    [跳过] 文档没有任何分段，无法生成摘要")
+                    total_skip += 1
+                    continue
                 
                 for attempt in range(1, MAX_RETRIES + 1):
                     success, message, should_skip = generate_and_save_summary(
