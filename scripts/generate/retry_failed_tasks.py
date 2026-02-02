@@ -70,8 +70,8 @@ RETRY_DELAY = 5          # 重试间隔（秒）
 # ------------------------------
 # 文件类型过滤（基于API返回的type字段）
 # ------------------------------
-INCLUDE_FILE_TYPES = {'doc', 'docx', 'txt', 'md', 'wps'}
-# INCLUDE_FILE_TYPES = {'pdf'}
+# INCLUDE_FILE_TYPES = {'doc', 'docx', 'txt', 'md', 'wps'}
+INCLUDE_FILE_TYPES = {'pdf'}
 # INCLUDE_FILE_TYPES = None  # 处理所有类型
 
 EXCLUDE_FILE_TYPES = None
@@ -85,7 +85,7 @@ RETRY_STATUS = ['error', 'failed', 'cancelled', 'no_task']
 # 向量化任务配置
 # ------------------------------
 SPLIT_MODE = 'common'    # 'common'(普通切割) 或 'semantic'(语义切割)
-PARSE_ENHANCE = False    # 是否开启精准解析
+PARSE_ENHANCE = True    # 是否开启精准解析
 IMAGE_TASK = False       # 是否处理图片任务
 
 # ============================================================

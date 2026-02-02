@@ -3,15 +3,16 @@
 远程知识库文档统计脚本
 
 功能：
-- 统计所有知识库的向量化状态
+- 统计知识库的向量化状态
 - 分类显示：成功、进行中、失败、已取消、无任务
-- 生成详细统计报告并保存到日志文件
+- 生成Excel格式的统计报告（CSV格式）
 
 使用方法：
 python scripts/local/scan_remote.py
 """
 import sys
 import os
+import csv
 from datetime import datetime
 
 # 添加项目根目录到路径
@@ -24,38 +25,31 @@ from src.core import LingyanDataset
 from src.core.models import FolderMap
 from src.config import API_KEY, WORKSPACES, LOGS_DIR
 
-# 构建 WORKSPACE_IDS 格式
-WORKSPACE_IDS = [(ws["id"], ws["name"]) for ws in WORKSPACES]
+# 只统计第一个工作空间
+TARGET_WORKSPACE = WORKSPACES[0]
+WORKSPACE_ID = TARGET_WORKSPACE["id"]
+WORKSPACE_NAME = TARGET_WORKSPACE["name"]
 
-# 确保logs文件夹存在（LOGS_DIR已经是完整路径）
+# 确保logs文件夹存在
 if not os.path.exists(LOGS_DIR):
     os.makedirs(LOGS_DIR)
 
 # 记录开始时间
 start_time = datetime.now()
 print(f"开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
+print(f"统计工作空间: {WORKSPACE_NAME}")
 print("=" * 60)
 
 dataset = LingyanDataset(API_KEY)
 
-# 获取所有工作空间的知识库列表
-all_datasets = []
-for ws_id, ws_name in WORKSPACE_IDS:
-    status, datasets_list = dataset.list_datasets(ws_id)
-    if status != 200:
-        print(f"[{ws_name}] 获取知识库列表失败: {datasets_list}")
-        continue
-    print(f"[{ws_name}] 获取到 {len(datasets_list)} 个知识库")
-    for ds in datasets_list:
-        if not isinstance(ds, dict):
-            print(f"[{ws_name}] 跳过非字典数据: {type(ds)} - {ds}")
-            continue
-        ds["_workspace_id"] = ws_id
-        ds["_workspace_name"] = ws_name
-        all_datasets.append(ds)
+# 获取知识库列表
+status, datasets_list = dataset.list_datasets(WORKSPACE_ID)
+if status != 200:
+    print(f"获取知识库列表失败: {datasets_list}")
+    sys.exit(1)
 
-print(f"\n总共获取到 {len(all_datasets)} 个知识库")
-datasets = all_datasets
+print(f"获取到 {len(datasets_list)} 个知识库")
+datasets = [ds for ds in datasets_list if isinstance(ds, dict)]
 
 
 def get_folder_path(folder_id):
@@ -73,7 +67,6 @@ def get_folder_path(folder_id):
 
 def get_doc_size(doc):
     """获取文档大小（字节）"""
-    # 优先使用 file_size，其次 size
     size = doc.get("file_size")
     if size is not None and size > 0:
         return size
@@ -85,13 +78,13 @@ def get_doc_size(doc):
 
 def format_size(size_bytes):
     """格式化文件大小为人类可读格式"""
-    if size_bytes >= 1024 ** 4:  # TB
+    if size_bytes >= 1024 ** 4:
         return f"{size_bytes / (1024 ** 4):.2f} TB"
-    elif size_bytes >= 1024 ** 3:  # GB
+    elif size_bytes >= 1024 ** 3:
         return f"{size_bytes / (1024 ** 3):.2f} GB"
-    elif size_bytes >= 1024 ** 2:  # MB
+    elif size_bytes >= 1024 ** 2:
         return f"{size_bytes / (1024 ** 2):.2f} MB"
-    elif size_bytes >= 1024:  # KB
+    elif size_bytes >= 1024:
         return f"{size_bytes / 1024:.2f} KB"
     else:
         return f"{size_bytes} B"
@@ -113,51 +106,20 @@ def get_doc_status(doc):
         return latest_task.get("status", "unknown"), latest_task.get("type")
 
 
-# 统计变量
-success_docs = []
-indexing_docs = []
-error_docs = []
-cancelled_docs = []
-no_task_docs = []
-total_docs = 0
-total_size = 0  # 总文件大小（字节）
-status_count = {}
-
-# 按状态统计大小
-size_by_status = {
-    "success": 0,
-    "indexing": 0,
-    "error": 0,
-    "cancelled": 0,
-    "no_task": 0
-}
-
-# 按工作空间统计大小
-size_by_workspace = {}
-
-# 按文件类型统计（使用API返回的type字段）
 # 文本文件类型
 TEXT_FILE_TYPES = {'doc', 'docx', 'txt', 'md', 'wps'}
 
-# 按文件类型统计
-file_type_stats = {
-    "text": {"count": 0, "size": 0, "success": 0, "indexing": 0, "error": 0, "cancelled": 0, "no_task": 0},
-    "pdf": {"count": 0, "size": 0, "success": 0, "indexing": 0, "error": 0, "cancelled": 0, "no_task": 0},
-    "other": {"count": 0, "size": 0, "success": 0, "indexing": 0, "error": 0, "cancelled": 0, "no_task": 0},
-}
+# 存储所有文档数据
+all_docs = []
 
-dataset_success_count = {}
-dataset_indexing_count = {}
-dataset_error_count = {}
-
+# 遍历知识库获取文档
 for i, ds in enumerate(datasets):
     dataset_id = ds.get("id")
     dataset_name = ds.get("name")
     folder_id = ds.get("folder_id")
     folder_path = get_folder_path(folder_id)
-    ws_name = ds.get("_workspace_name", "未知")
     
-    print(f"[{i+1}/{len(datasets)}] [{ws_name}] 正在处理知识库: {dataset_name}", end="")
+    print(f"[{i+1}/{len(datasets)}] 正在处理: {dataset_name}", end="")
     
     try:
         status, documents = dataset.list_documents(dataset_id)
@@ -165,260 +127,282 @@ for i, ds in enumerate(datasets):
             print(f" - 获取文档失败: {documents}")
             continue
         
-        ds_success = 0
-        ds_indexing = 0
-        ds_error = 0
-        
         for doc in documents:
-            total_docs += 1
             doc_name = doc.get("name", "未知")
             doc_size = get_doc_size(doc)
-            doc_type = doc.get("type", "")  # API返回的文件类型
-            total_size += doc_size
+            doc_type = doc.get("type", "")
+            doc_status, _ = get_doc_status(doc)
             
-            # 按工作空间统计大小
-            if ws_name not in size_by_workspace:
-                size_by_workspace[ws_name] = 0
-            size_by_workspace[ws_name] += doc_size
-            
-            # 判断文件类型分类
+            # 确定文件类别
             if doc_type in TEXT_FILE_TYPES:
-                file_category = "text"
+                file_category = "文本"
             elif doc_type == "pdf":
-                file_category = "pdf"
+                file_category = "PDF"
             else:
-                file_category = "other"
+                file_category = "其他"
             
-            # 统计文件类型数量和大小
-            file_type_stats[file_category]["count"] += 1
-            file_type_stats[file_category]["size"] += doc_size
-            
-            doc_status, task_type = get_doc_status(doc)
-            
-            status_count[doc_status] = status_count.get(doc_status, 0) + 1
-            
+            # 标准化状态
             if doc_status in ["completed", "success"]:
-                ds_success += 1
-                size_by_status["success"] += doc_size
-                file_type_stats[file_category]["success"] += 1
-                success_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size, "type": doc_type})
+                status_label = "成功"
             elif doc_status in ["indexing", "parsing", "waiting", "queuing"]:
-                ds_indexing += 1
-                size_by_status["indexing"] += doc_size
-                file_type_stats[file_category]["indexing"] += 1
-                indexing_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "status": doc_status, "folder_path": folder_path, "workspace": ws_name, "size": doc_size, "type": doc_type})
+                status_label = "进行中"
             elif doc_status in ["error", "failed"]:
-                ds_error += 1
-                size_by_status["error"] += doc_size
-                file_type_stats[file_category]["error"] += 1
-                error_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size, "type": doc_type})
+                status_label = "失败"
             elif doc_status == "cancelled":
-                size_by_status["cancelled"] += doc_size
-                file_type_stats[file_category]["cancelled"] += 1
-                cancelled_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size, "type": doc_type})
+                status_label = "已取消"
             elif doc_status == "no_task":
-                size_by_status["no_task"] += doc_size
-                file_type_stats[file_category]["no_task"] += 1
-                no_task_docs.append({"dataset_name": dataset_name, "doc_name": doc_name, "folder_path": folder_path, "workspace": ws_name, "size": doc_size, "type": doc_type})
+                status_label = "无任务"
+            else:
+                status_label = doc_status
+            
+            all_docs.append({
+                "dataset_name": dataset_name,
+                "folder_path": folder_path,
+                "doc_name": doc_name,
+                "doc_type": doc_type,
+                "file_category": file_category,
+                "status": status_label,
+                "size": doc_size,
+            })
         
-        result_parts = []
-        if ds_success > 0:
-            dataset_success_count[dataset_name] = {"count": ds_success, "folder_path": folder_path, "workspace": ws_name}
-            result_parts.append(f"✓成功:{ds_success}")
-        if ds_indexing > 0:
-            dataset_indexing_count[dataset_name] = {"count": ds_indexing, "folder_path": folder_path, "workspace": ws_name}
-            result_parts.append(f"⏳进行中:{ds_indexing}")
-        if ds_error > 0:
-            dataset_error_count[dataset_name] = {"count": ds_error, "folder_path": folder_path, "workspace": ws_name}
-            result_parts.append(f"✗失败:{ds_error}")
-        
-        if result_parts:
-            print(f" - {', '.join(result_parts)}")
-        else:
-            print(f" - 文档数:{len(documents)}")
+        print(f" - 文档数: {len(documents)}")
             
     except Exception as e:
         print(f" - 处理出错: {e}")
 
-print(f"\n{'='*60}")
-print(f"统计结果")
-print(f"{'='*60}")
-print(f"总知识库数: {len(datasets)}")
-print(f"总文档数: {total_docs}")
-print(f"总文件大小: {format_size(total_size)}")
-print(f"")
-print(f"向量解析成功的文档数: {len(success_docs)} ({format_size(size_by_status['success'])})")
-print(f"正在向量化的文档数: {len(indexing_docs)} ({format_size(size_by_status['indexing'])})")
-print(f"向量化失败的文档数: {len(error_docs)} ({format_size(size_by_status['error'])})")
-print(f"已取消的文档数: {len(cancelled_docs)} ({format_size(size_by_status['cancelled'])})")
-print(f"没有任务的文档数: {len(no_task_docs)} ({format_size(size_by_status['no_task'])})")
+# ============================================================================
+# 统计计算
+# ============================================================================
 
-print(f"\n各状态文档数量统计:")
-for s, count in sorted(status_count.items(), key=lambda x: -x[1]):
-    print(f"  {s}: {count}")
+total_docs = len(all_docs)
+total_size = sum(d["size"] for d in all_docs)
 
-if dataset_success_count:
-    print(f"\n{'='*60}")
-    print(f"向量化成功的知识库列表 (共 {len(dataset_success_count)} 个):")
-    print(f"{'='*60}")
-    for name, info in sorted(dataset_success_count.items(), key=lambda x: -x[1]["count"]):
-        print(f"  [{info['workspace']}] 路径: {info['folder_path']}")
-        print(f"  知识库: {name}")
-        print(f"  成功文档数: {info['count']} 个")
-        print()
+# 按状态统计
+status_stats = {}
+for doc in all_docs:
+    s = doc["status"]
+    if s not in status_stats:
+        status_stats[s] = {"count": 0, "size": 0}
+    status_stats[s]["count"] += 1
+    status_stats[s]["size"] += doc["size"]
 
-if dataset_indexing_count:
-    print(f"\n{'='*60}")
-    print(f"正在向量化的知识库列表 (共 {len(dataset_indexing_count)} 个):")
-    print(f"{'='*60}")
-    for name, info in sorted(dataset_indexing_count.items(), key=lambda x: -x[1]["count"]):
-        print(f"  [{info['workspace']}] 路径: {info['folder_path']}")
-        print(f"  知识库: {name}")
-        print(f"  进行中文档数: {info['count']} 个")
-        print()
+# 按文件类别统计
+category_stats = {"文本": {}, "PDF": {}, "其他": {}}
+for cat in category_stats:
+    category_stats[cat] = {
+        "总数": 0, "总大小": 0,
+        "成功": 0, "成功大小": 0,
+        "进行中": 0, "进行中大小": 0,
+        "失败": 0, "失败大小": 0,
+        "已取消": 0, "已取消大小": 0,
+        "无任务": 0, "无任务大小": 0,
+    }
+
+for doc in all_docs:
+    cat = doc["file_category"]
+    s = doc["status"]
+    size = doc["size"]
     
-    print(f"\n正在向量化的文档详情:")
-    for doc in indexing_docs[:50]:
-        print(f"  [{doc['workspace']}] [{doc['folder_path']}] [{doc['dataset_name']}] {doc['doc_name']} ({doc['status']})")
-    if len(indexing_docs) > 50:
-        print(f"  ... 还有 {len(indexing_docs) - 50} 个文档")
+    category_stats[cat]["总数"] += 1
+    category_stats[cat]["总大小"] += size
+    
+    if s in category_stats[cat]:
+        category_stats[cat][s] += 1
+        category_stats[cat][f"{s}大小"] += size
 
-if dataset_error_count:
-    print(f"\n{'='*60}")
-    print(f"向量化失败的知识库列表 (共 {len(dataset_error_count)} 个):")
-    print(f"{'='*60}")
-    for name, info in sorted(dataset_error_count.items(), key=lambda x: -x[1]["count"]):
-        print(f"  [{info['workspace']}] 路径: {info['folder_path']}")
-        print(f"  知识库: {name}")
-        print(f"  失败文档数: {info['count']} 个")
-        print()
+# ============================================================================
+# 生成报告
+# ============================================================================
 
-# 最终汇总统计
-ws1_name = WORKSPACE_IDS[0][1] if len(WORKSPACE_IDS) > 0 else "工作空间1"
-ws2_name = WORKSPACE_IDS[1][1] if len(WORKSPACE_IDS) > 1 else "工作空间2"
+timestamp = start_time.strftime('%Y-%m-%d_%H%M%S')
+csv_filename = os.path.join(LOGS_DIR, f"vector_stats_{timestamp}.csv")
 
-ws1_success = sum(1 for doc in success_docs if doc["workspace"] == ws1_name)
-ws2_success = sum(1 for doc in success_docs if doc["workspace"] == ws2_name)
-ws1_indexing = sum(1 for doc in indexing_docs if doc["workspace"] == ws1_name)
-ws2_indexing = sum(1 for doc in indexing_docs if doc["workspace"] == ws2_name)
-ws1_error = sum(1 for doc in error_docs if doc["workspace"] == ws1_name)
-ws2_error = sum(1 for doc in error_docs if doc["workspace"] == ws2_name)
-ws1_cancelled = sum(1 for doc in cancelled_docs if doc["workspace"] == ws1_name)
-ws2_cancelled = sum(1 for doc in cancelled_docs if doc["workspace"] == ws2_name)
-ws1_no_task = sum(1 for doc in no_task_docs if doc["workspace"] == ws1_name)
-ws2_no_task = sum(1 for doc in no_task_docs if doc["workspace"] == ws2_name)
+# 写入CSV文件
+with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
+    writer = csv.writer(f)
+    
+    # ========== 表1: 汇总统计 ==========
+    writer.writerow(["【汇总统计】"])
+    writer.writerow(["工作空间", WORKSPACE_NAME])
+    writer.writerow(["统计时间", start_time.strftime('%Y-%m-%d %H:%M:%S')])
+    writer.writerow(["知识库数量", len(datasets)])
+    writer.writerow(["文档总数", total_docs])
+    writer.writerow(["文件总大小", format_size(total_size)])
+    writer.writerow([])
+    
+    # 状态汇总表
+    writer.writerow(["状态", "数量", "大小", "占比"])
+    status_order = ["成功", "进行中", "失败", "已取消", "无任务"]
+    for s in status_order:
+        if s in status_stats:
+            count = status_stats[s]["count"]
+            size = status_stats[s]["size"]
+            pct = f"{count/total_docs*100:.1f}%" if total_docs > 0 else "0%"
+            writer.writerow([s, count, format_size(size), pct])
+    writer.writerow(["总计", total_docs, format_size(total_size), "100%"])
+    writer.writerow([])
+    writer.writerow([])
+    
+    # ========== 表2: 文本文件统计 ==========
+    writer.writerow(["【文本文件统计】(doc/docx/txt/md/wps)"])
+    text_stats = category_stats["文本"]
+    writer.writerow(["状态", "数量", "大小"])
+    writer.writerow(["总数", text_stats["总数"], format_size(text_stats["总大小"])])
+    writer.writerow(["成功", text_stats["成功"], format_size(text_stats["成功大小"])])
+    writer.writerow(["进行中", text_stats["进行中"], format_size(text_stats["进行中大小"])])
+    writer.writerow(["失败", text_stats["失败"], format_size(text_stats["失败大小"])])
+    writer.writerow(["已取消", text_stats["已取消"], format_size(text_stats["已取消大小"])])
+    writer.writerow(["无任务", text_stats["无任务"], format_size(text_stats["无任务大小"])])
+    writer.writerow([])
+    writer.writerow([])
+    
+    # ========== 表3: PDF文件统计 ==========
+    writer.writerow(["【PDF文件统计】"])
+    pdf_stats = category_stats["PDF"]
+    writer.writerow(["状态", "数量", "大小"])
+    writer.writerow(["总数", pdf_stats["总数"], format_size(pdf_stats["总大小"])])
+    writer.writerow(["成功", pdf_stats["成功"], format_size(pdf_stats["成功大小"])])
+    writer.writerow(["进行中", pdf_stats["进行中"], format_size(pdf_stats["进行中大小"])])
+    writer.writerow(["失败", pdf_stats["失败"], format_size(pdf_stats["失败大小"])])
+    writer.writerow(["已取消", pdf_stats["已取消"], format_size(pdf_stats["已取消大小"])])
+    writer.writerow(["无任务", pdf_stats["无任务"], format_size(pdf_stats["无任务大小"])])
+    writer.writerow([])
+    writer.writerow([])
+    
+    # ========== 表4: 其他文件统计 ==========
+    writer.writerow(["【其他文件统计】"])
+    other_stats = category_stats["其他"]
+    writer.writerow(["状态", "数量", "大小"])
+    writer.writerow(["总数", other_stats["总数"], format_size(other_stats["总大小"])])
+    writer.writerow(["成功", other_stats["成功"], format_size(other_stats["成功大小"])])
+    writer.writerow(["进行中", other_stats["进行中"], format_size(other_stats["进行中大小"])])
+    writer.writerow(["失败", other_stats["失败"], format_size(other_stats["失败大小"])])
+    writer.writerow(["已取消", other_stats["已取消"], format_size(other_stats["已取消大小"])])
+    writer.writerow(["无任务", other_stats["无任务"], format_size(other_stats["无任务大小"])])
+    writer.writerow([])
+    writer.writerow([])
+    
+    # ========== 表5: 文件大小分布统计 ==========
+    writer.writerow(["【文件大小分布统计】"])
+    
+    # 按大小分段
+    size_ranges = [
+        ("0-100KB", 0, 100 * 1024),
+        ("100KB-1MB", 100 * 1024, 1024 * 1024),
+        ("1MB-10MB", 1024 * 1024, 10 * 1024 * 1024),
+        ("10MB-50MB", 10 * 1024 * 1024, 50 * 1024 * 1024),
+        ("50MB-100MB", 50 * 1024 * 1024, 100 * 1024 * 1024),
+        (">100MB", 100 * 1024 * 1024, float('inf')),
+    ]
+    
+    size_distribution = {r[0]: {"count": 0, "size": 0} for r in size_ranges}
+    for doc in all_docs:
+        for range_name, min_size, max_size in size_ranges:
+            if min_size <= doc["size"] < max_size:
+                size_distribution[range_name]["count"] += 1
+                size_distribution[range_name]["size"] += doc["size"]
+                break
+    
+    writer.writerow(["大小范围", "文件数量", "总大小", "占比"])
+    for range_name, _, _ in size_ranges:
+        count = size_distribution[range_name]["count"]
+        size = size_distribution[range_name]["size"]
+        pct = f"{count/total_docs*100:.1f}%" if total_docs > 0 else "0%"
+        writer.writerow([range_name, count, format_size(size), pct])
+    writer.writerow([])
+    writer.writerow([])
+    
+    # ========== 表6: 按类型和状态的完整统计表 ==========
+    writer.writerow(["【按文件类型和状态的完整统计】"])
+    writer.writerow(["文件类型", "总数", "总大小", "成功", "进行中", "失败", "已取消", "无任务"])
+    for cat in ["文本", "PDF", "其他"]:
+        stats = category_stats[cat]
+        writer.writerow([
+            cat,
+            stats["总数"],
+            format_size(stats["总大小"]),
+            stats["成功"],
+            stats["进行中"],
+            stats["失败"],
+            stats["已取消"],
+            stats["无任务"],
+        ])
+    # 总计行
+    writer.writerow([
+        "总计",
+        total_docs,
+        format_size(total_size),
+        status_stats.get("成功", {}).get("count", 0),
+        status_stats.get("进行中", {}).get("count", 0),
+        status_stats.get("失败", {}).get("count", 0),
+        status_stats.get("已取消", {}).get("count", 0),
+        status_stats.get("无任务", {}).get("count", 0),
+    ])
 
-total_success = ws1_success + ws2_success
-total_indexing = ws1_indexing + ws2_indexing
-total_error = ws1_error + ws2_error
-total_cancelled = ws1_cancelled + ws2_cancelled
-total_no_task = ws1_no_task + ws2_no_task
+# ============================================================================
+# 控制台输出
+# ============================================================================
 
-ws1_total = ws1_success + ws1_indexing + ws1_error + ws1_cancelled + ws1_no_task
-ws2_total = ws2_success + ws2_indexing + ws2_error + ws2_cancelled + ws2_no_task
-
-# 计算各工作空间大小
-ws1_size = size_by_workspace.get(ws1_name, 0)
-ws2_size = size_by_workspace.get(ws2_name, 0)
-
-print(f"\n{'='*80}")
-print(f"最终汇总统计")
-print(f"{'='*80}")
-print(f"")
-print(f"  工作空间            总数      成功    进行中      失败    已取消    无任务       大小")
-print(f"  {'-'*90}")
-print(f"  {ws1_name}      {ws1_total:>8}  {ws1_success:>8}  {ws1_indexing:>8}  {ws1_error:>8}  {ws1_cancelled:>8}  {ws1_no_task:>8}  {format_size(ws1_size):>10}")
-if len(WORKSPACE_IDS) > 1:
-    print(f"  {ws2_name}  {ws2_total:>8}  {ws2_success:>8}  {ws2_indexing:>8}  {ws2_error:>8}  {ws2_cancelled:>8}  {ws2_no_task:>8}  {format_size(ws2_size):>10}")
-print(f"  {'-'*90}")
-print(f"  【总计】          {total_docs:>8}  {total_success:>8}  {total_indexing:>8}  {total_error:>8}  {total_cancelled:>8}  {total_no_task:>8}  {format_size(total_size):>10}")
-print(f"")
-print(f"  📊 文件大小统计:")
-print(f"     总大小: {format_size(total_size)}")
-print(f"     成功: {format_size(size_by_status['success'])}")
-print(f"     进行中: {format_size(size_by_status['indexing'])}")
-print(f"     失败: {format_size(size_by_status['error'])}")
-print(f"     已取消: {format_size(size_by_status['cancelled'])}")
-print(f"     无任务: {format_size(size_by_status['no_task'])}")
-print(f"")
-
-# 按文件类型统计
-print(f"  📁 按文件类型统计:")
-print(f"     {'类型':<8} {'总数':>8} {'大小':>12} {'成功':>8} {'进行中':>8} {'失败':>8} {'取消':>8} {'无任务':>8}")
-print(f"     {'-'*76}")
-for ftype, label in [("text", "文本"), ("pdf", "PDF"), ("other", "其他")]:
-    stats = file_type_stats[ftype]
-    print(f"     {label:<8} {stats['count']:>8} {format_size(stats['size']):>12} {stats['success']:>8} {stats['indexing']:>8} {stats['error']:>8} {stats['cancelled']:>8} {stats['no_task']:>8}")
-print(f"")
-
-# 计算耗时
 end_time = datetime.now()
 duration = end_time - start_time
 duration_str = str(duration).split('.')[0]
 
-print(f"{'='*60}")
-print(f"统计时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')} ~ {end_time.strftime('%H:%M:%S')}")
-print(f"总耗时: {duration_str}")
-print(f"{'='*60}")
+print("\n" + "=" * 70)
+print("统计结果")
+print("=" * 70)
 
-# 保存统计结果到日志文件
-log_filename = os.path.join(LOGS_DIR, f"vector_stats_{start_time.strftime('%Y-%m-%d_%H%M%S')}.log")
+# 汇总统计表格
+print("\n【汇总统计】")
+print(f"┌{'─'*12}┬{'─'*10}┬{'─'*14}┬{'─'*8}┐")
+print(f"│ {'状态':<10} │ {'数量':>8} │ {'大小':>12} │ {'占比':>6} │")
+print(f"├{'─'*12}┼{'─'*10}┼{'─'*14}┼{'─'*8}┤")
+for s in status_order:
+    if s in status_stats:
+        count = status_stats[s]["count"]
+        size = format_size(status_stats[s]["size"])
+        pct = f"{count/total_docs*100:.1f}%" if total_docs > 0 else "0%"
+        print(f"│ {s:<10} │ {count:>8} │ {size:>12} │ {pct:>6} │")
+print(f"├{'─'*12}┼{'─'*10}┼{'─'*14}┼{'─'*8}┤")
+print(f"│ {'总计':<10} │ {total_docs:>8} │ {format_size(total_size):>12} │ {'100%':>6} │")
+print(f"└{'─'*12}┴{'─'*10}┴{'─'*14}┴{'─'*8}┘")
 
-log_lines = []
-log_lines.append("=" * 80)
-log_lines.append(f"向量化统计报告")
-log_lines.append(f"统计时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')} ~ {end_time.strftime('%H:%M:%S')}")
-log_lines.append(f"总耗时: {duration_str}")
-log_lines.append("=" * 80)
-log_lines.append("")
-log_lines.append(f"总知识库数: {len(datasets)}")
-log_lines.append(f"总文档数: {total_docs}")
-log_lines.append(f"总文件大小: {format_size(total_size)}")
-log_lines.append("")
-log_lines.append("【汇总统计】")
-log_lines.append(f"  工作空间            总数      成功    进行中      失败    已取消    无任务       大小")
-log_lines.append(f"  {'-'*90}")
-log_lines.append(f"  {ws1_name}      {ws1_total:>8}  {ws1_success:>8}  {ws1_indexing:>8}  {ws1_error:>8}  {ws1_cancelled:>8}  {ws1_no_task:>8}  {format_size(ws1_size):>10}")
-if len(WORKSPACE_IDS) > 1:
-    log_lines.append(f"  {ws2_name}  {ws2_total:>8}  {ws2_success:>8}  {ws2_indexing:>8}  {ws2_error:>8}  {ws2_cancelled:>8}  {ws2_no_task:>8}  {format_size(ws2_size):>10}")
-log_lines.append(f"  {'-'*90}")
-log_lines.append(f"  【总计】          {total_docs:>8}  {total_success:>8}  {total_indexing:>8}  {total_error:>8}  {total_cancelled:>8}  {total_no_task:>8}  {format_size(total_size):>10}")
-log_lines.append("")
-log_lines.append("【文件大小统计】")
-log_lines.append(f"  总大小: {format_size(total_size)}")
-log_lines.append(f"  成功: {format_size(size_by_status['success'])}")
-log_lines.append(f"  进行中: {format_size(size_by_status['indexing'])}")
-log_lines.append(f"  失败: {format_size(size_by_status['error'])}")
-log_lines.append(f"  已取消: {format_size(size_by_status['cancelled'])}")
-log_lines.append(f"  无任务: {format_size(size_by_status['no_task'])}")
-log_lines.append("")
+# 文本文件统计
+print("\n【文本文件统计】(doc/docx/txt/md/wps)")
+text_stats = category_stats["文本"]
+print(f"  总数: {text_stats['总数']} 个 ({format_size(text_stats['总大小'])})")
+print(f"  成功: {text_stats['成功']} | 进行中: {text_stats['进行中']} | 失败: {text_stats['失败']} | 已取消: {text_stats['已取消']} | 无任务: {text_stats['无任务']}")
 
-log_lines.append("【按文件类型统计】")
-log_lines.append(f"  {'类型':<8} {'总数':>8} {'大小':>12} {'成功':>8} {'进行中':>8} {'失败':>8} {'取消':>8} {'无任务':>8}")
-log_lines.append(f"  {'-'*76}")
-for ftype, label in [("text", "文本"), ("pdf", "PDF"), ("other", "其他")]:
-    stats = file_type_stats[ftype]
-    log_lines.append(f"  {label:<8} {stats['count']:>8} {format_size(stats['size']):>12} {stats['success']:>8} {stats['indexing']:>8} {stats['error']:>8} {stats['cancelled']:>8} {stats['no_task']:>8}")
-log_lines.append("")
+# PDF文件统计
+print("\n【PDF文件统计】")
+pdf_stats = category_stats["PDF"]
+print(f"  总数: {pdf_stats['总数']} 个 ({format_size(pdf_stats['总大小'])})")
+print(f"  成功: {pdf_stats['成功']} | 进行中: {pdf_stats['进行中']} | 失败: {pdf_stats['失败']} | 已取消: {pdf_stats['已取消']} | 无任务: {pdf_stats['无任务']}")
 
-log_lines.append("【各状态文档数量】")
-for s, count in sorted(status_count.items(), key=lambda x: -x[1]):
-    log_lines.append(f"  {s}: {count}")
-log_lines.append("")
+# 其他文件统计
+print("\n【其他文件统计】")
+other_stats = category_stats["其他"]
+print(f"  总数: {other_stats['总数']} 个 ({format_size(other_stats['总大小'])})")
+print(f"  成功: {other_stats['成功']} | 进行中: {other_stats['进行中']} | 失败: {other_stats['失败']} | 已取消: {other_stats['已取消']} | 无任务: {other_stats['无任务']}")
 
-if indexing_docs:
-    log_lines.append(f"【正在向量化的文档】(共 {len(indexing_docs)} 个)")
-    for doc in indexing_docs:
-        log_lines.append(f"  [{doc['workspace']}] [{doc['folder_path']}] [{doc['dataset_name']}] {doc['doc_name']} ({doc['status']})")
-    log_lines.append("")
+# 文件大小分布
+print("\n【文件大小分布】")
+print(f"┌{'─'*14}┬{'─'*10}┬{'─'*14}┬{'─'*8}┐")
+print(f"│ {'大小范围':<12} │ {'数量':>8} │ {'总大小':>12} │ {'占比':>6} │")
+print(f"├{'─'*14}┼{'─'*10}┼{'─'*14}┼{'─'*8}┤")
+for range_name, _, _ in size_ranges:
+    count = size_distribution[range_name]["count"]
+    size = format_size(size_distribution[range_name]["size"])
+    pct = f"{count/total_docs*100:.1f}%" if total_docs > 0 else "0%"
+    print(f"│ {range_name:<12} │ {count:>8} │ {size:>12} │ {pct:>6} │")
+print(f"└{'─'*14}┴{'─'*10}┴{'─'*14}┴{'─'*8}┘")
 
-if error_docs:
-    log_lines.append(f"【向量化失败的文档】(共 {len(error_docs)} 个)")
-    for doc in error_docs:
-        log_lines.append(f"  [{doc['workspace']}] [{doc['folder_path']}] [{doc['dataset_name']}] {doc['doc_name']}")
-    log_lines.append("")
+print("\n" + "=" * 70)
+print(f"工作空间: {WORKSPACE_NAME}")
+print(f"知识库数: {len(datasets)}")
+print(f"文档总数: {total_docs}")
+print(f"文件总大小: {format_size(total_size)}")
+print(f"统计耗时: {duration_str}")
+print("=" * 70)
 
-with open(log_filename, 'w', encoding='utf-8') as f:
-    f.write('\n'.join(log_lines))
-
-print(f"\n📄 统计报告已保存到: {log_filename}")
+print(f"\n📊 统计报告已保存到: {csv_filename}")
+print("   可直接用 Excel 打开此 CSV 文件")
