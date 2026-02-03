@@ -35,10 +35,12 @@ from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACES
 # ============================================================
 
 # workspace ID 配置
-workspace_ids = [(ws["id"], ws["name"]) for ws in WORKSPACES]
+# workspace_ids = [(ws["id"], ws["name"]) for ws in WORKSPACES]
+# 只使用环北知识库
+workspace_ids = [("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "环北知识库")]
 
 # 只处理指定目录下的知识库（为空则处理所有目录）
-TARGET_FOLDER_PATH = None
+TARGET_FOLDER_PATH = "环北"
 
 # ------------------------------
 # 运行模式
