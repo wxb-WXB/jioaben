@@ -10,6 +10,7 @@
 - 支持所有文件类型：文档、图片、视频、压缩包等
 - 输出详细日志文件
 - 支持多进程并行扫描多个目录
+- 支持导出CSV表格
 
 使用方法：
 1. 修改下方 SCAN_DIRS 配置要扫描的目录
@@ -21,6 +22,7 @@ import zipfile
 import tarfile
 import tempfile
 import shutil
+import csv
 from datetime import datetime
 from collections import defaultdict
 from concurrent.futures import ProcessPoolExecutor, as_completed
@@ -47,10 +49,11 @@ except ImportError:
 
 # 方式2：使用配置文件中的目录（取消上面的注释后，下面这行生效）
 SCAN_DIRS = DEFAULT_SCAN_DIRS or [
-    r"E:\环北部湾广东水资源配置工程",
     r"F:\0-智能体资料汇总收集",
-    r"F:\最终分类",
-    r"F:\办公室档案知识库资料",
+    r"F:\办公室档案知识库资料1",
+    r"F:\办公室档案知识库资料2",
+    r"F:\办公室档案知识库资料3",
+    r" F:\01 知识库答案文本"
 ]
 
 # 方式2：扫描整个盘符（取消注释需要扫描的盘）
@@ -135,6 +138,27 @@ FILE_CATEGORIES = {
     },
 }
 
+# 分类说明（包含的主要文件类型）
+CATEGORY_DESCRIPTIONS = {
+    '文本': 'doc/docx/txt/md/rtf/wps等',
+    'PDF': 'pdf',
+    '表格': 'xls/xlsx/csv/et/ods等',
+    'PPT': 'ppt/pptx/dps/key等',
+    '图片': 'jpg/png/gif/bmp/psd/svg等',
+    '视频': 'mp4/avi/mkv/mov/wmv/flv等',
+    '音频': 'mp3/wav/flac/aac/ogg/wma等',
+    '压缩包': 'zip/rar/7z/tar/gz等',
+    '电子书': 'epub/mobi/azw/chm/djvu等',
+    '设计': 'psd/ai/sketch/fig/xd/indd/cdr/dwg/dxf',
+    '代码': 'py/js/java/c/cpp/go/php等',
+    '网页': 'html/css/xml/json/yaml等',
+    '数据库': 'db/sqlite/mdb/sql等',
+    '字体': 'ttf/otf/woff/woff2等',
+    '可执行': 'exe/msi/dll/app/dmg等',
+    '配置': 'ini/cfg/conf/config等',
+    '其他': '未分类的其他文件类型',
+}
+
 # 支持解压的格式
 SUPPORTED_ARCHIVES = {'zip', 'tar', 'gz', 'tgz', 'bz2', 'tbz2', 'xz'}
 
@@ -158,6 +182,67 @@ class Logger:
         with open(self.log_file, 'w', encoding='utf-8') as f:
             f.writelines(self.lines)
         print(f"\n日志已保存到: {self.log_file}")
+
+
+def print_table(headers, rows, col_widths=None, logger=None):
+    """
+    打印格式化表格
+    headers: 表头列表
+    rows: 数据行列表（每行是一个列表）
+    col_widths: 可选的列宽列表
+    logger: 可选的日志记录器
+    """
+    if col_widths is None:
+        # 自动计算列宽
+        col_widths = []
+        for i, h in enumerate(headers):
+            max_width = len(str(h))
+            for row in rows:
+                if i < len(row):
+                    # 处理中文字符宽度
+                    cell = str(row[i])
+                    cell_width = sum(2 if ord(c) > 127 else 1 for c in cell)
+                    max_width = max(max_width, cell_width)
+            col_widths.append(max_width + 2)
+    
+    def format_cell(text, width):
+        """格式化单元格，处理中文对齐"""
+        text = str(text)
+        text_width = sum(2 if ord(c) > 127 else 1 for c in text)
+        padding = width - text_width
+        return text + " " * max(0, padding)
+    
+    def log_line(line):
+        if logger:
+            logger.log(line)
+        else:
+            print(line)
+    
+    # 打印表头分隔线
+    separator = "+" + "+".join("-" * w for w in col_widths) + "+"
+    log_line(separator)
+    
+    # 打印表头
+    header_line = "|" + "|".join(format_cell(h, col_widths[i]) for i, h in enumerate(headers)) + "|"
+    log_line(header_line)
+    log_line(separator)
+    
+    # 打印数据行
+    for row in rows:
+        row_line = "|" + "|".join(format_cell(row[i] if i < len(row) else "", col_widths[i]) for i in range(len(headers))) + "|"
+        log_line(row_line)
+    
+    log_line(separator)
+
+
+def export_to_csv(filepath, headers, rows):
+    """导出数据到CSV文件"""
+    os.makedirs(os.path.dirname(filepath), exist_ok=True)
+    with open(filepath, 'w', encoding='utf-8-sig', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(headers)
+        writer.writerows(rows)
+    print(f"CSV已导出到: {filepath}")
 
 
 def get_file_extension(filename):
@@ -279,7 +364,7 @@ def scan_directory(root_dir, logger=None, extract_archives=True, progress_dict=N
     folder_stats = defaultdict(lambda: {
         'count': 0,
         'size': 0,
-        'categories': defaultdict(int),
+        'categories': defaultdict(lambda: {'count': 0, 'size': 0}),
         'archive_files': 0
     })
     
@@ -323,7 +408,8 @@ def scan_directory(root_dir, logger=None, extract_archives=True, progress_dict=N
             
             folder_stats[top_folder]['count'] += 1
             folder_stats[top_folder]['size'] += file_size
-            folder_stats[top_folder]['categories'][category] += 1
+            folder_stats[top_folder]['categories'][category]['count'] += 1
+            folder_stats[top_folder]['categories'][category]['size'] += file_size
             
             # 如果是压缩文件且开启了解压统计
             if extract_archives and ext in SUPPORTED_ARCHIVES:
@@ -349,7 +435,7 @@ def scan_directory(root_dir, logger=None, extract_archives=True, progress_dict=N
         'total_size': total_size,
         'ext_stats': dict(ext_stats),
         'category_stats': dict(category_stats),
-        'folder_stats': {k: {'count': v['count'], 'size': v['size'], 'categories': dict(v['categories']), 'archive_files': v['archive_files']} for k, v in folder_stats.items()},
+        'folder_stats': {k: {'count': v['count'], 'size': v['size'], 'categories': {ck: dict(cv) for ck, cv in v['categories'].items()}, 'archive_files': v['archive_files']} for k, v in folder_stats.items()},
         'archive_count': archive_count,
         'archive_files_count': archive_files_count,
         'archive_files_size': archive_files_size,
@@ -491,7 +577,7 @@ def main():
     folder_stats = defaultdict(lambda: {
         'count': 0,
         'size': 0,
-        'categories': defaultdict(int),
+        'categories': defaultdict(lambda: {'count': 0, 'size': 0}),
         'archive_files': 0
     })
     
@@ -601,8 +687,9 @@ def main():
             folder_stats[key]['count'] += stats['count']
             folder_stats[key]['size'] += stats['size']
             folder_stats[key]['archive_files'] += stats['archive_files']
-            for cat, cnt in stats['categories'].items():
-                folder_stats[key]['categories'][cat] += cnt
+            for cat, cat_stats in stats['categories'].items():
+                folder_stats[key]['categories'][cat]['count'] += cat_stats['count']
+                folder_stats[key]['categories'][cat]['size'] += cat_stats['size']
     
     # 输出结果
     logger.log("\n" + "=" * 80)
@@ -617,83 +704,261 @@ def main():
         logger.log(f"  合计文件数:       {total_files + total_archive_files} (含压缩包内文件)")
         logger.log(f"  合计文件大小:     {format_size(total_size + total_archive_size)} (含压缩包内文件)")
     
-    # 按文件分类统计
+    # ============================================================
+    # 表格输出 - 按文件分类统计
+    # ============================================================
     logger.log("\n" + "=" * 80)
-    logger.log("按文件分类统计")
+    logger.log("📊 按文件分类统计（表格）")
     logger.log("=" * 80)
-    if EXTRACT_ARCHIVES:
-        logger.log(f"  {'分类':<10} {'直接数量':>10} {'直接大小':>15} {'压缩包内':>10} {'压缩包大小':>15} {'合计数量':>10}")
-        logger.log("-" * 80)
-    else:
-        logger.log(f"  {'分类':<10} {'数量':>10} {'大小':>15}")
-        logger.log("-" * 80)
     
     sorted_categories = sorted(category_stats.items(), key=lambda x: -(x[1]['count'] + x[1]['archive_count']))
-    for cat, stats in sorted_categories:
-        if EXTRACT_ARCHIVES:
-            total_count = stats['count'] + stats['archive_count']
-            logger.log(f"  {cat:<10} {stats['count']:>10} {format_size(stats['size']):>15} {stats['archive_count']:>10} {format_size(stats['archive_size']):>15} {total_count:>10}")
-        else:
-            logger.log(f"  {cat:<10} {stats['count']:>10} {format_size(stats['size']):>15}")
     
-    # 按文件扩展名统计
-    logger.log("\n" + "=" * 80)
-    logger.log("按文件扩展名统计（前30）")
-    logger.log("=" * 80)
     if EXTRACT_ARCHIVES:
-        logger.log(f"  {'扩展名':<12} {'直接数量':>10} {'直接大小':>15} {'压缩包内':>10} {'压缩包大小':>15} {'合计':>10}")
-        logger.log("-" * 80)
-    else:
-        logger.log(f"  {'扩展名':<12} {'数量':>10} {'大小':>15}")
-        logger.log("-" * 80)
-    
-    sorted_exts = sorted(ext_stats.items(), key=lambda x: -(x[1]['count'] + x[1]['archive_count']))
-    for ext, stats in sorted_exts[:30]:
-        if EXTRACT_ARCHIVES:
+        cat_headers = ["分类", "包含的文件类型", "直接数量", "直接大小", "压缩包内数量", "压缩包内大小", "合计数量", "合计大小"]
+        cat_rows = []
+        for cat, stats in sorted_categories:
             total_count = stats['count'] + stats['archive_count']
-            logger.log(f"  .{ext:<11} {stats['count']:>10} {format_size(stats['size']):>15} {stats['archive_count']:>10} {format_size(stats['archive_size']):>15} {total_count:>10}")
-        else:
-            logger.log(f"  .{ext:<11} {stats['count']:>10} {format_size(stats['size']):>15}")
+            total_cat_size = stats['size'] + stats['archive_size']
+            desc = CATEGORY_DESCRIPTIONS.get(cat, "")
+            cat_rows.append([
+                cat,
+                desc,
+                stats['count'],
+                format_size(stats['size']),
+                stats['archive_count'],
+                format_size(stats['archive_size']),
+                total_count,
+                format_size(total_cat_size)
+            ])
+        # 添加汇总行
+        cat_rows.append([
+            "【合计】",
+            "-",
+            total_files,
+            format_size(total_size),
+            total_archive_files,
+            format_size(total_archive_size),
+            total_files + total_archive_files,
+            format_size(total_size + total_archive_size)
+        ])
+    else:
+        cat_headers = ["分类", "包含的文件类型", "数量", "大小", "占比"]
+        cat_rows = []
+        for cat, stats in sorted_categories:
+            percent = f"{stats['count'] / total_files * 100:.1f}%" if total_files > 0 else "0%"
+            desc = CATEGORY_DESCRIPTIONS.get(cat, "")
+            cat_rows.append([cat, desc, stats['count'], format_size(stats['size']), percent])
+        cat_rows.append(["【合计】", "-", total_files, format_size(total_size), "100%"])
     
-    if len(sorted_exts) > 30:
-        logger.log(f"  ... 还有 {len(sorted_exts) - 30} 种其他类型")
+    print_table(cat_headers, cat_rows, logger=logger)
     
-    # 完整扩展名列表
+    # ============================================================
+    # 表格输出 - 按一级目录统计
+    # ============================================================
     logger.log("\n" + "=" * 80)
-    logger.log("完整扩展名列表（按数量排序）")
-    logger.log("=" * 80)
-    for ext, stats in sorted_exts:
-        total_count = stats['count'] + stats['archive_count']
-        total_ext_size = stats['size'] + stats['archive_size']
-        if EXTRACT_ARCHIVES and stats['archive_count'] > 0:
-            logger.log(f"  .{ext:<15} 数量: {total_count:>8} (直接:{stats['count']}, 压缩包内:{stats['archive_count']})  大小: {format_size(total_ext_size)}")
-        else:
-            logger.log(f"  .{ext:<15} 数量: {stats['count']:>8}  大小: {format_size(stats['size'])}")
-    
-    # 按一级目录统计
-    logger.log("\n" + "=" * 80)
-    logger.log("按一级目录统计")
+    logger.log("📊 按一级目录统计（表格）")
     logger.log("=" * 80)
     
     sorted_folders = sorted(folder_stats.items(), key=lambda x: -x[1]['count'])
     
+    # 定义所有分类列（包含音频和视频）
+    all_categories = ['文本', 'PDF', '表格', 'PPT', '图片', '视频', '音频', '压缩包', '电子书', '设计', '代码', '网页', '数据库', '字体', '可执行', '配置', '其他']
+    
+    # ============================================================
+    # 表格1：按分类汇总统计（所有目录加起来的总数）
+    # ============================================================
+    logger.log("\n【汇总统计 - 所有目录合计】")
+    
+    summary_headers = ["分类", "包含的文件类型", "文件数量", "文件大小", "占比(数量)", "占比(大小)"]
+    summary_rows = []
+    
+    for cat in all_categories:
+        cat_total_count = 0
+        cat_total_size = 0
+        for folder_name, stats in folder_stats.items():
+            cat_data = stats['categories'].get(cat, {'count': 0, 'size': 0})
+            cat_total_count += cat_data['count']
+            cat_total_size += cat_data['size']
+        
+        if cat_total_count > 0:
+            count_percent = f"{cat_total_count / total_files * 100:.1f}%" if total_files > 0 else "0%"
+            size_percent = f"{cat_total_size / total_size * 100:.1f}%" if total_size > 0 else "0%"
+            desc = CATEGORY_DESCRIPTIONS.get(cat, "")
+            summary_rows.append([cat, desc, cat_total_count, format_size(cat_total_size), count_percent, size_percent])
+    
+    # 添加合计行
+    summary_rows.append(["【合计】", "-", total_files, format_size(total_size), "100%", "100%"])
+    
+    print_table(summary_headers, summary_rows, logger=logger)
+    
+    # ============================================================
+    # 表格2：按目录分类统计（每个目录的详细统计）
+    # ============================================================
+    logger.log("\n【分目录统计 - 各目录详情】")
+    
+    # 先输出分类说明
+    logger.log("\n  📋 分类说明:")
+    for cat in all_categories:
+        desc = CATEGORY_DESCRIPTIONS.get(cat, "")
+        logger.log(f"     {cat}: {desc}")
+    logger.log("")
+    
+    # 构建表头：每个分类有数量和大小两列
+    folder_headers = ["目录", "总文件数", "总大小"]
+    if EXTRACT_ARCHIVES:
+        folder_headers.append("压缩包内")
+    
+    for cat in all_categories:
+        folder_headers.append(f"{cat}(数量)")
+        folder_headers.append(f"{cat}(大小)")
+    
+    folder_rows = []
     for folder_name, stats in sorted_folders:
         cats = stats['categories']
         
-        logger.log(f"\n  【{folder_name}】")
-        if EXTRACT_ARCHIVES and stats['archive_files'] > 0:
-            logger.log(f"      文件数: {stats['count']}  大小: {format_size(stats['size'])}  压缩包内文件: {stats['archive_files']}")
-        else:
-            logger.log(f"      文件数: {stats['count']}  大小: {format_size(stats['size'])}")
+        row = [folder_name, stats['count'], format_size(stats['size'])]
+        if EXTRACT_ARCHIVES:
+            row.append(stats['archive_files'])
         
-        cat_parts = []
-        for cat in ['文本', 'PDF', '表格', 'PPT', '图片', '视频', '音频', '压缩包', '代码', '电子书', '设计', '其他']:
-            if cats.get(cat, 0) > 0:
-                cat_parts.append(f"{cat}:{cats[cat]}")
-        if cat_parts:
-            logger.log(f"      {', '.join(cat_parts)}")
+        # 添加每个分类的数量和大小
+        for cat in all_categories:
+            cat_data = cats.get(cat, {'count': 0, 'size': 0})
+            count = cat_data['count'] if cat_data['count'] > 0 else ""
+            size = format_size(cat_data['size']) if cat_data['size'] > 0 else ""
+            row.append(count)
+            row.append(size)
+        
+        folder_rows.append(row)
     
-    # 最终汇总
+    # 添加汇总行
+    total_row = ["【合计】", total_files, format_size(total_size)]
+    if EXTRACT_ARCHIVES:
+        total_row.append(total_archive_files)
+    for cat in all_categories:
+        cat_total_count = 0
+        cat_total_size = 0
+        for folder_name, stats in folder_stats.items():
+            cat_data = stats['categories'].get(cat, {'count': 0, 'size': 0})
+            cat_total_count += cat_data['count']
+            cat_total_size += cat_data['size']
+        total_row.append(cat_total_count if cat_total_count > 0 else "")
+        total_row.append(format_size(cat_total_size) if cat_total_size > 0 else "")
+    folder_rows.append(total_row)
+    
+    print_table(folder_headers, folder_rows, logger=logger)
+    
+    # ============================================================
+    # 表格3：全部文件扩展名统计（包括所有类型）
+    # ============================================================
+    logger.log("\n" + "=" * 80)
+    logger.log("📊 全部文件扩展名统计（表格3 - 所有类型）")
+    logger.log("=" * 80)
+    
+    sorted_exts = sorted(ext_stats.items(), key=lambda x: -(x[1]['count'] + x[1].get('archive_count', 0)))
+    
+    if EXTRACT_ARCHIVES:
+        all_ext_headers = ["扩展名", "所属分类", "直接数量", "直接大小", "压缩包内数量", "压缩包内大小", "合计数量", "合计大小", "占比"]
+        all_ext_rows = []
+        grand_total_count = total_files + total_archive_files
+        for ext, stats in sorted_exts:
+            total_count = stats['count'] + stats.get('archive_count', 0)
+            total_ext_size = stats['size'] + stats.get('archive_size', 0)
+            percent = f"{total_count / grand_total_count * 100:.2f}%" if grand_total_count > 0 else "0%"
+            all_ext_rows.append([
+                f".{ext}",
+                get_file_category(ext),
+                stats['count'],
+                format_size(stats['size']),
+                stats.get('archive_count', 0),
+                format_size(stats.get('archive_size', 0)),
+                total_count,
+                format_size(total_ext_size),
+                percent
+            ])
+        # 添加合计行
+        all_ext_rows.append([
+            "【合计】", "-",
+            total_files, format_size(total_size),
+            total_archive_files, format_size(total_archive_size),
+            grand_total_count, format_size(total_size + total_archive_size),
+            "100%"
+        ])
+    else:
+        all_ext_headers = ["扩展名", "所属分类", "数量", "大小", "占比(数量)", "占比(大小)"]
+        all_ext_rows = []
+        for ext, stats in sorted_exts:
+            count_percent = f"{stats['count'] / total_files * 100:.2f}%" if total_files > 0 else "0%"
+            size_percent = f"{stats['size'] / total_size * 100:.2f}%" if total_size > 0 else "0%"
+            all_ext_rows.append([
+                f".{ext}",
+                get_file_category(ext),
+                stats['count'],
+                format_size(stats['size']),
+                count_percent,
+                size_percent
+            ])
+        all_ext_rows.append(["【合计】", "-", total_files, format_size(total_size), "100%", "100%"])
+    
+    print_table(all_ext_headers, all_ext_rows, logger=logger)
+    logger.log(f"  共 {len(sorted_exts)} 种不同的文件扩展名")
+    
+    # ============================================================
+    # 导出CSV文件
+    # ============================================================
+    csv_base = os.path.join(LOG_DIR, f"scan_stats_{timestamp}")
+    
+    # 导出分类统计CSV
+    csv_category_file = f"{csv_base}_分类统计.csv"
+    export_to_csv(csv_category_file, cat_headers, cat_rows)
+    
+    # 导出扩展名统计CSV（全部类型）
+    csv_ext_file = f"{csv_base}_扩展名统计.csv"
+    export_to_csv(csv_ext_file, all_ext_headers, all_ext_rows)
+    
+    # 导出目录统计CSV
+    csv_folder_file = f"{csv_base}_目录统计.csv"
+    export_to_csv(csv_folder_file, folder_headers, folder_rows)
+    
+    # 导出汇总CSV（包含所有统计信息在一个文件中）
+    csv_summary_file = f"{csv_base}_汇总.csv"
+    with open(csv_summary_file, 'w', encoding='utf-8-sig', newline='') as f:
+        writer = csv.writer(f)
+        
+        # 总体统计
+        writer.writerow(["=== 总体统计 ==="])
+        writer.writerow(["项目", "数值"])
+        writer.writerow(["文件总数", total_files])
+        writer.writerow(["文件总大小", format_size(total_size)])
+        if EXTRACT_ARCHIVES:
+            writer.writerow(["压缩包数量", total_archive_count])
+            writer.writerow(["压缩包内文件数", total_archive_files])
+            writer.writerow(["压缩包内文件大小", format_size(total_archive_size)])
+            writer.writerow(["合计文件数", total_files + total_archive_files])
+            writer.writerow(["合计文件大小", format_size(total_size + total_archive_size)])
+        writer.writerow([])
+        
+        # 分类统计
+        writer.writerow(["=== 按分类统计 ==="])
+        writer.writerow(cat_headers)
+        writer.writerows(cat_rows)
+        writer.writerow([])
+        
+        # 扩展名统计（全部类型）
+        writer.writerow(["=== 按扩展名统计（全部类型） ==="])
+        writer.writerow(all_ext_headers)
+        writer.writerows(all_ext_rows)
+        writer.writerow([])
+        
+        # 目录统计
+        writer.writerow(["=== 按目录统计 ==="])
+        writer.writerow(folder_headers)
+        writer.writerows(folder_rows)
+    
+    print(f"汇总CSV已导出到: {csv_summary_file}")
+    
+    # ============================================================
+    # 最终汇总（保留原有格式）
+    # ============================================================
     logger.log("\n" + "=" * 80)
     logger.log("最终汇总")
     logger.log("=" * 80)
@@ -738,6 +1003,13 @@ def main():
     logger.log("\n" + "=" * 80)
     logger.log(f"扫描完成时间: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
     logger.log("=" * 80)
+    
+    # 输出导出文件列表
+    logger.log("\n📁 导出文件列表:")
+    logger.log(f"  - 分类统计: {csv_category_file}")
+    logger.log(f"  - 扩展名统计: {csv_ext_file}")
+    logger.log(f"  - 目录统计: {csv_folder_file}")
+    logger.log(f"  - 汇总文件: {csv_summary_file}")
     
     # 保存日志
     logger.save()
