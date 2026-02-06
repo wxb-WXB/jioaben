@@ -304,31 +304,31 @@ UPLOAD_TASKS = [
     #  },
 
     # 新增文件-正在传
-     {
-         "local_folder": r'E:\0-工程知识库建设材料\7-机电运营部',
-         "folder_id": "2c63dd8c-6e46-4665-86d4-55cfb5bc6d5a",
-         "dataset_name": "机电设计管理",
-      },
-       {
-         "local_folder": r'E:\0-工程知识库建设材料\8-高鹤管理部',
-         "folder_id": "d750aa05-27d3-46b8-98d0-81800904b6eb",
-         "dataset_name": "项目文件",
-      },
-       {
-         "local_folder": r'E:\0-工程知识库建设材料\9-综合监督部\1.廉洁防控',
-         "folder_id": "41d75943-9362-4939-9cdd-d009afd44388",
-         "dataset_name": "廉洁风险防控",
-      },
-        {
-         "local_folder": r'E:\0-工程知识库建设材料\9-综合监督部\1.廉洁防控',
-         "folder_id": "41d75943-9362-4939-9cdd-d009afd44388",
-         "dataset_name": "廉洁风险防控",
-      },
-       {
-         "local_folder": r'E:\0-工程知识库建设材料\10-湛江管理部',
-         "folder_id": "57b72b1d-8d6e-44db-a688-070ea0642355",
-         "dataset_name": "综合文件",
-      },
+    #  {
+    #      "local_folder": r'E:\0-工程知识库建设材料\7-机电运营部',
+    #      "folder_id": "2c63dd8c-6e46-4665-86d4-55cfb5bc6d5a",
+    #      "dataset_name": "机电设计管理",
+    #   },
+    #    {
+    #      "local_folder": r'E:\0-工程知识库建设材料\8-高鹤管理部',
+    #      "folder_id": "d750aa05-27d3-46b8-98d0-81800904b6eb",
+    #      "dataset_name": "项目文件",
+    #   },
+    #    {
+    #      "local_folder": r'E:\0-工程知识库建设材料\9-综合监督部\1.廉洁防控',
+    #      "folder_id": "41d75943-9362-4939-9cdd-d009afd44388",
+    #      "dataset_name": "廉洁风险防控",
+    #   },
+    #     {
+    #      "local_folder": r'E:\0-工程知识库建设材料\9-综合监督部\1.廉洁防控',
+    #      "folder_id": "41d75943-9362-4939-9cdd-d009afd44388",
+    #      "dataset_name": "廉洁风险防控",
+    #   },
+    #    {
+    #      "local_folder": r'E:\0-工程知识库建设材料\10-湛江管理部',
+    #      "folder_id": "57b72b1d-8d6e-44db-a688-070ea0642355",
+    #      "dataset_name": "综合文件",
+    #   },
 
       # 预算部--待传文件 2026年2月4日提供
        {
@@ -378,12 +378,12 @@ UPLOAD_TASKS = [
       },
        {
          "local_folder": r'F:\0-2026智能体资料汇总收集\3-预算部（全部材料仅限粤西公司查询）\1.6其他文件\定额解释',
-         "folder_id": "",
+         "folder_id": "75ab6aa5-5d09-49d1-9943-c33b45ae91bf",
          "dataset_name": "定额解释",
       },
        {
          "local_folder": r'F:\0-2026智能体资料汇总收集\3-预算部（全部材料仅限粤西公司查询）\1.6其他文件\制度文件',
-         "folder_id": "",
+         "folder_id": "e5034672-c7a7-436d-b4f5-c19b684930ea",
          "dataset_name": "制度文件",
       },
 ]
