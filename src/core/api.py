@@ -1,5 +1,5 @@
 """
-灵眼AI核心API模块
+灵燕AI核心API模块
 ================
 
 本模块封装了AI平台的核心API接口，提供以下功能：
@@ -77,7 +77,7 @@ def get_session():
 
 class LingyanFile:
     """
-    灵眼AI文件服务类
+    灵燕AI文件服务类
     
     提供文件上传和下载操作。
     
@@ -364,6 +364,33 @@ class LingyanDataset:
         except requests.exceptions.RequestException as e:
             log.error(f"文件重名检测请求失败: {str(e)}")
             return 500, {"error": str(e)}, 0
+
+    def get_folder_tree(self, workspace_id: str) -> tuple[int, dict | str]:
+        """获取文件夹树结构"""
+        from src.config import AUTH_TOKEN
+        
+        url = f"{API_HOST}/api/v1/console/datasets/folders/tree"
+        headers = {
+            "accept": "application/json",
+            "Authorization": f"Bearer {AUTH_TOKEN}",
+            "X-Workspace-Id": workspace_id,
+            "x-fly-tenantid": "00000000-0000-0000-0000-000000000000"
+        }
+        
+        try:
+            session = get_session()
+            response = session.get(
+                url,
+                params={"workspace_id": workspace_id},
+                headers=headers,
+                timeout=DEFAULT_TIMEOUT
+            )
+            if response.status_code != 200:
+                return response.status_code, response.json().get("msg", "Unknown error")
+            return 200, response.json().get("data", {})
+        except requests.exceptions.RequestException as e:
+            log.error(f"获取文件夹树失败: {str(e)}")
+            return 500, f"请求失败: {str(e)}"
 
     def list_documents(self, dataset_id: str, workspace_id: str = None) -> tuple[int, list | str]:
         """获取文档列表（自动分页加载所有数据）"""

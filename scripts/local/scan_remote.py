@@ -42,6 +42,63 @@ print("=" * 60)
 
 dataset = LingyanDataset(API_KEY)
 
+# 获取文件夹树结构
+print("正在获取文件夹树结构...")
+status, folder_tree = dataset.get_folder_tree(WORKSPACE_ID)
+if status != 200:
+    print(f"获取文件夹树失败: {folder_tree}")
+    folder_tree = {}
+else:
+    print(f"文件夹树获取成功")
+
+# 构建 folder_id 到一级目录名称的映射
+folder_id_to_first_level = {}
+all_first_level_folders = {}  # 记录所有一级目录
+
+def build_folder_mapping(nodes, first_level_name=None, level=0):
+    """递归构建 folder_id 到一级目录名称的映射"""
+    if not nodes:
+        return
+    
+    for node in nodes:
+        folder_id = node.get("id")
+        folder_name = node.get("name", "")
+        children = node.get("children", [])
+        
+        # 如果是一级节点（level=0），则使用当前节点名作为一级目录名
+        if level == 0:
+            current_first_level = folder_name
+            # 记录所有一级目录
+            if folder_id:
+                all_first_level_folders[current_first_level] = {
+                    "id": folder_id,
+                    "name": folder_name,
+                    "has_datasets": False
+                }
+        else:
+            current_first_level = first_level_name
+        
+        if folder_id:
+            folder_id_to_first_level[folder_id] = current_first_level
+        
+        # 递归处理子节点
+        if children:
+            build_folder_mapping(children, current_first_level, level + 1)
+
+# 构建映射 - 从 tree 字段获取
+if isinstance(folder_tree, dict):
+    tree = folder_tree.get("tree", [])
+    if tree:
+        build_folder_mapping(tree)
+        print(f"构建了 {len(folder_id_to_first_level)} 个文件夹的映射关系")
+        print(f"发现 {len(all_first_level_folders)} 个一级目录:")
+        for idx, name in enumerate(sorted(all_first_level_folders.keys()), 1):
+            print(f"  {idx:2d}. {name}")
+    else:
+        print(f"警告: tree 字段为空")
+else:
+    print(f"警告: 返回数据不是字典类型")
+
 # 获取知识库列表
 status, datasets_list = dataset.list_datasets(WORKSPACE_ID)
 if status != 200:
@@ -52,8 +109,15 @@ print(f"获取到 {len(datasets_list)} 个知识库")
 datasets = [ds for ds in datasets_list if isinstance(ds, dict)]
 
 
+def get_first_level_folder_name(folder_id):
+    """根据 folder_id 获取一级目录名称"""
+    if not folder_id:
+        return "根目录"
+    return folder_id_to_first_level.get(folder_id, f"未知目录(ID:{folder_id})")
+
+
 def get_folder_path(folder_id):
-    """根据 folder_id 获取文件夹路径"""
+    """根据 folder_id 获取文件夹路径（用于向后兼容）"""
     if not folder_id:
         return "根目录"
     try:
@@ -109,8 +173,9 @@ def get_doc_status(doc):
 # 文本文件类型
 TEXT_FILE_TYPES = {'doc', 'docx', 'txt', 'md', 'wps'}
 
-# 存储所有文档数据
-all_docs = []
+# 存储所有数据
+all_docs = []  # 所有文档数据
+dataset_info = []  # 知识库信息（包含一级目录）
 
 # 遍历知识库获取文档
 for i, ds in enumerate(datasets):
@@ -118,14 +183,30 @@ for i, ds in enumerate(datasets):
     dataset_name = ds.get("name")
     folder_id = ds.get("folder_id")
     folder_path = get_folder_path(folder_id)
+    first_level_folder = get_first_level_folder_name(folder_id)  # 获取一级目录名称
     
     print(f"[{i+1}/{len(datasets)}] 正在处理: {dataset_name}", end="")
+    
+    # 记录知识库信息
+    dataset_record = {
+        "dataset_id": dataset_id,
+        "dataset_name": dataset_name,
+        "first_level_folder": first_level_folder,
+        "folder_path": folder_path,
+        "doc_count": 0,
+        "total_size": 0,
+        "文本": 0, "PDF": 0, "其他": 0,
+        "成功": 0, "进行中": 0, "失败": 0, "已取消": 0, "无任务": 0,
+    }
     
     try:
         status, documents = dataset.list_documents(dataset_id)
         if status != 200:
             print(f" - 获取文档失败: {documents}")
+            dataset_info.append(dataset_record)
             continue
+        
+        dataset_record["doc_count"] = len(documents)
         
         for doc in documents:
             doc_name = doc.get("name", "未知")
@@ -155,9 +236,17 @@ for i, ds in enumerate(datasets):
             else:
                 status_label = doc_status
             
+            # 更新知识库统计
+            dataset_record["total_size"] += doc_size
+            dataset_record[file_category] += 1
+            dataset_record[status_label] += 1
+            
+            # 记录文档详情
             all_docs.append({
+                "dataset_id": dataset_id,
                 "dataset_name": dataset_name,
                 "folder_path": folder_path,
+                "first_level_folder": first_level_folder,
                 "doc_name": doc_name,
                 "doc_type": doc_type,
                 "file_category": file_category,
@@ -166,9 +255,11 @@ for i, ds in enumerate(datasets):
             })
         
         print(f" - 文档数: {len(documents)}")
+        dataset_info.append(dataset_record)
             
     except Exception as e:
         print(f" - 处理出错: {e}")
+        dataset_info.append(dataset_record)
 
 # ============================================================================
 # 统计计算
@@ -209,6 +300,68 @@ for doc in all_docs:
     if s in category_stats[cat]:
         category_stats[cat][s] += 1
         category_stats[cat][f"{s}大小"] += size
+
+# 按一级目录统计（改为基于知识库的统计）
+first_level_stats = {}
+
+# 首先初始化所有一级目录（即使没有知识库）
+for dir_name in all_first_level_folders.keys():
+    first_level_stats[dir_name] = {
+        "知识库数": 0,
+        "知识库列表": [],
+        "总文档数": 0, 
+        "总大小": 0,
+        "文本": 0, "文本大小": 0,
+        "PDF": 0, "PDF大小": 0,
+        "其他": 0, "其他大小": 0,
+        "成功": 0, "进行中": 0, "失败": 0, "已取消": 0, "无任务": 0,
+    }
+
+# 统计各知识库到一级目录
+for ds_info in dataset_info:
+    first_dir = ds_info["first_level_folder"]
+    
+    # 如果目录不在统计中，添加进去（处理根目录和未知目录的情况）
+    if first_dir not in first_level_stats:
+        first_level_stats[first_dir] = {
+            "知识库数": 0,
+            "知识库列表": [],
+            "总文档数": 0, 
+            "总大小": 0,
+            "文本": 0, "文本大小": 0,
+            "PDF": 0, "PDF大小": 0,
+            "其他": 0, "其他大小": 0,
+            "成功": 0, "进行中": 0, "失败": 0, "已取消": 0, "无任务": 0,
+        }
+    
+    stats = first_level_stats[first_dir]
+    stats["知识库数"] += 1
+    stats["知识库列表"].append({
+        "name": ds_info["dataset_name"],
+        "doc_count": ds_info["doc_count"],
+        "size": ds_info["total_size"],
+    })
+    stats["总文档数"] += ds_info["doc_count"]
+    stats["总大小"] += ds_info["total_size"]
+    
+    # 标记该一级目录有知识库
+    if first_dir in all_first_level_folders:
+        all_first_level_folders[first_dir]["has_datasets"] = True
+    
+    # 按文件类别统计
+    for cat in ["文本", "PDF", "其他"]:
+        stats[cat] += ds_info[cat]
+    
+    # 按状态统计
+    for s in ["成功", "进行中", "失败", "已取消", "无任务"]:
+        stats[s] += ds_info[s]
+
+# 计算每个类别的大小（需要从文档明细计算）
+for doc in all_docs:
+    first_dir = doc["first_level_folder"]
+    if first_dir in first_level_stats:
+        cat = doc["file_category"]
+        first_level_stats[first_dir][f"{cat}大小"] += doc["size"]
 
 # ============================================================================
 # 生成报告
@@ -338,6 +491,106 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
         status_stats.get("已取消", {}).get("count", 0),
         status_stats.get("无任务", {}).get("count", 0),
     ])
+    writer.writerow([])
+    writer.writerow([])
+    
+    # ========== 表7: 按一级目录统计（知识库维度）==========
+    writer.writerow(["【按一级目录统计（知识库维度）】"])
+    writer.writerow([])
+    
+    # 按知识库数量排序（根目录优先，然后按知识库数量降序，空目录放最后）
+    sorted_dirs = sorted(
+        first_level_stats.items(), 
+        key=lambda x: (
+            x[0] == "根目录" and -1,  # 根目录排第一
+            x[1]["知识库数"] == 0,     # 空目录排最后
+            -x[1]["知识库数"]          # 其他按知识库数量降序
+        )
+    )
+    
+    # 写入汇总统计表
+    writer.writerow(["一级目录名称", "知识库数", "文档总数", "总大小", "文本", "PDF", "其他", "成功", "进行中", "失败", "已取消", "无任务"])
+    
+    for dir_name, stats in sorted_dirs:
+        writer.writerow([
+            dir_name,
+            stats["知识库数"],
+            stats["总文档数"],
+            format_size(stats["总大小"]),
+            stats["文本"],
+            stats["PDF"],
+            stats["其他"],
+            stats["成功"],
+            stats["进行中"],
+            stats["失败"],
+            stats["已取消"],
+            stats["无任务"],
+        ])
+    
+    # 总计行
+    total_datasets = sum(s["知识库数"] for s in first_level_stats.values())
+    writer.writerow([
+        "【总计】",
+        total_datasets,
+        total_docs,
+        format_size(total_size),
+        category_stats["文本"]["总数"],
+        category_stats["PDF"]["总数"],
+        category_stats["其他"]["总数"],
+        status_stats.get("成功", {}).get("count", 0),
+        status_stats.get("进行中", {}).get("count", 0),
+        status_stats.get("失败", {}).get("count", 0),
+        status_stats.get("已取消", {}).get("count", 0),
+        status_stats.get("无任务", {}).get("count", 0),
+    ])
+    writer.writerow([])
+    
+    # 写入统计摘要
+    non_empty_dirs = sum(1 for s in first_level_stats.values() if s["知识库数"] > 0)
+    empty_dirs = len(first_level_stats) - non_empty_dirs
+    writer.writerow([f"说明: 共 {len(first_level_stats)} 个一级目录，其中 {non_empty_dirs} 个有知识库，{empty_dirs} 个为空"])
+    writer.writerow([])
+    
+    # ========== 表8: 按一级目录展开知识库明细 ==========
+    writer.writerow(["【一级目录-知识库明细】"])
+    writer.writerow([])
+    
+    # 只显示有知识库的目录
+    dirs_with_datasets = [(name, stats) for name, stats in sorted_dirs if stats["知识库数"] > 0]
+    
+    for dir_name, stats in dirs_with_datasets:
+        # 写入目录标题
+        writer.writerow([f"【{dir_name}】", f"知识库数: {stats['知识库数']}", f"文档数: {stats['总文档数']}", f"大小: {format_size(stats['总大小'])}"])
+        writer.writerow(["序号", "知识库名称", "文档数", "文件大小"])
+        
+        # 写入该目录下的知识库列表
+        for idx, kb in enumerate(sorted(stats["知识库列表"], key=lambda x: -x["doc_count"]), 1):
+            writer.writerow([
+                idx,
+                kb["name"],
+                kb["doc_count"],
+                format_size(kb["size"]),
+            ])
+        
+        writer.writerow([])  # 空行分隔
+    
+    # ========== 表9: 所有文档明细列表 ==========
+    writer.writerow(["【所有文档明细列表】"])
+    writer.writerow(["序号", "一级目录", "知识库名称", "文档名称", "文件类型", "文件大小", "状态"])
+    
+    # 按一级目录和知识库排序
+    sorted_docs = sorted(all_docs, key=lambda x: (x["first_level_folder"] != "根目录", x["first_level_folder"], x["dataset_name"], x["doc_name"]))
+    
+    for idx, doc in enumerate(sorted_docs, 1):
+        writer.writerow([
+            idx,
+            doc["first_level_folder"],
+            doc["dataset_name"],
+            doc["doc_name"],
+            doc["doc_type"],
+            format_size(doc["size"]),
+            doc["status"],
+        ])
 
 # ============================================================================
 # 控制台输出
@@ -395,6 +648,62 @@ for range_name, _, _ in size_ranges:
     pct = f"{count/total_docs*100:.1f}%" if total_docs > 0 else "0%"
     print(f"│ {range_name:<12} │ {count:>8} │ {size:>12} │ {pct:>6} │")
 print(f"└{'─'*14}┴{'─'*10}┴{'─'*14}┴{'─'*8}┘")
+
+# 按一级目录统计
+print("\n【按一级目录统计（知识库维度）】")
+
+# 按知识库数量排序（根目录优先，空目录放最后）
+sorted_dirs = sorted(
+    first_level_stats.items(), 
+    key=lambda x: (
+        x[0] == "根目录" and -1,
+        x[1]["知识库数"] == 0,
+        -x[1]["知识库数"]
+    )
+)
+
+non_empty_dirs = sum(1 for s in first_level_stats.values() if s["知识库数"] > 0)
+empty_dirs = len(first_level_stats) - non_empty_dirs
+print(f"共有 {len(first_level_stats)} 个一级目录（{non_empty_dirs} 个有知识库，{empty_dirs} 个为空）")
+print()
+
+# 只显示有知识库的目录
+dirs_with_datasets = [(name, stats) for name, stats in sorted_dirs if stats["知识库数"] > 0]
+
+for idx, (dir_name, stats) in enumerate(dirs_with_datasets, 1):
+    print(f"{idx:2d}. 【{dir_name}】")
+    print(f"    知识库: {stats['知识库数']:>3} 个 | 文档: {stats['总文档数']:>5} 个 | 大小: {format_size(stats['总大小']):>10}")
+    print(f"    文本:{stats['文本']:>4} PDF:{stats['PDF']:>4} 其他:{stats['其他']:>4} | "
+          f"成功:{stats['成功']:>4} 进行中:{stats['进行中']:>4} 失败:{stats['失败']:>4}")
+    
+    # 显示该目录下的知识库（最多显示前3个）
+    kb_list = sorted(stats["知识库列表"], key=lambda x: -x["doc_count"])
+    display_kb_count = min(3, len(kb_list))
+    if kb_list:
+        for kb in kb_list[:display_kb_count]:
+            print(f"      - {kb['name']}: {kb['doc_count']} 个文档")
+        if len(kb_list) > display_kb_count:
+            print(f"      ... 还有 {len(kb_list) - display_kb_count} 个知识库")
+    print()
+
+if empty_dirs > 0:
+    print(f"另有 {empty_dirs} 个一级目录为空（无知识库），详见CSV报告")
+
+# 文档明细统计
+print("\n【文档明细统计】")
+print(f"文档总数: {total_docs} 个")
+print(f"文件总大小: {format_size(total_size)}")
+print()
+print("按一级目录分布（文档数）:")
+sorted_dirs_by_docs = sorted(first_level_stats.items(), key=lambda x: (x[0] != "根目录", -x[1]["总文档数"]))
+for idx, (dir_name, stats) in enumerate(sorted_dirs_by_docs[:10], 1):
+    pct = stats["总文档数"] / total_docs * 100 if total_docs > 0 else 0
+    print(f"  {idx:2d}. {dir_name}: {stats['总文档数']:>5} 个 ({pct:>5.1f}%) - {format_size(stats['总大小']):>10}")
+
+if len(sorted_dirs_by_docs) > 10:
+    print(f"  ... 还有 {len(sorted_dirs_by_docs) - 10} 个目录")
+
+print("\n详细的文档列表请查看CSV报告中的【所有文档明细列表】表")
 
 print("\n" + "=" * 70)
 print(f"工作空间: {WORKSPACE_NAME}")
