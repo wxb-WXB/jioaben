@@ -4,7 +4,7 @@
 
 功能：
 - 统计知识库的向量化状态
-- 分类显示：成功、进行中、失败、已取消、无任务
+- 分类显示：成功、进行中、待处理、已取消、无任务
 - 生成Excel格式的统计报告（CSV格式）
 
 使用方法：
@@ -36,9 +36,13 @@ if not os.path.exists(LOGS_DIR):
 
 # 记录开始时间
 start_time = datetime.now()
+date_str = start_time.strftime('%Y-%m-%d')
+print("=" * 70)
+print(f"知识库向量化状态统计 - {date_str}")
+print("=" * 70)
 print(f"开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
 print(f"统计工作空间: {WORKSPACE_NAME}")
-print("=" * 60)
+print("=" * 70)
 
 dataset = LingyanDataset(API_KEY)
 
@@ -196,7 +200,7 @@ for i, ds in enumerate(datasets):
         "doc_count": 0,
         "total_size": 0,
         "文本": 0, "PDF": 0, "其他": 0,
-        "成功": 0, "进行中": 0, "失败": 0, "已取消": 0, "无任务": 0,
+        "成功": 0, "进行中": 0, "待处理": 0, "已取消": 0, "无任务": 0,
     }
     
     try:
@@ -228,7 +232,7 @@ for i, ds in enumerate(datasets):
             elif doc_status in ["indexing", "parsing", "waiting", "queuing"]:
                 status_label = "进行中"
             elif doc_status in ["error", "failed"]:
-                status_label = "失败"
+                status_label = "待处理"
             elif doc_status == "cancelled":
                 status_label = "已取消"
             elif doc_status == "no_task":
@@ -284,7 +288,7 @@ for cat in category_stats:
         "总数": 0, "总大小": 0,
         "成功": 0, "成功大小": 0,
         "进行中": 0, "进行中大小": 0,
-        "失败": 0, "失败大小": 0,
+        "待处理": 0, "待处理大小": 0,
         "已取消": 0, "已取消大小": 0,
         "无任务": 0, "无任务大小": 0,
     }
@@ -314,7 +318,7 @@ for dir_name in all_first_level_folders.keys():
         "文本": 0, "文本大小": 0,
         "PDF": 0, "PDF大小": 0,
         "其他": 0, "其他大小": 0,
-        "成功": 0, "进行中": 0, "失败": 0, "已取消": 0, "无任务": 0,
+        "成功": 0, "进行中": 0, "待处理": 0, "已取消": 0, "无任务": 0,
     }
 
 # 统计各知识库到一级目录
@@ -331,7 +335,7 @@ for ds_info in dataset_info:
             "文本": 0, "文本大小": 0,
             "PDF": 0, "PDF大小": 0,
             "其他": 0, "其他大小": 0,
-            "成功": 0, "进行中": 0, "失败": 0, "已取消": 0, "无任务": 0,
+            "成功": 0, "进行中": 0, "待处理": 0, "已取消": 0, "无任务": 0,
         }
     
     stats = first_level_stats[first_dir]
@@ -353,7 +357,7 @@ for ds_info in dataset_info:
         stats[cat] += ds_info[cat]
     
     # 按状态统计
-    for s in ["成功", "进行中", "失败", "已取消", "无任务"]:
+    for s in ["成功", "进行中", "待处理", "已取消", "无任务"]:
         stats[s] += ds_info[s]
 
 # 计算每个类别的大小（需要从文档明细计算）
@@ -375,8 +379,9 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     writer = csv.writer(f)
     
     # ========== 表1: 汇总统计 ==========
-    writer.writerow(["【汇总统计】"])
+    writer.writerow([f"【汇总统计 - {start_time.strftime('%Y年%m月%d日')}】"])
     writer.writerow(["工作空间", WORKSPACE_NAME])
+    writer.writerow(["统计日期", start_time.strftime('%Y-%m-%d')])
     writer.writerow(["统计时间", start_time.strftime('%Y-%m-%d %H:%M:%S')])
     writer.writerow(["知识库数量", len(datasets)])
     writer.writerow(["文档总数", total_docs])
@@ -385,7 +390,7 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     
     # 状态汇总表
     writer.writerow(["状态", "数量", "大小", "占比"])
-    status_order = ["成功", "进行中", "失败", "已取消", "无任务"]
+    status_order = ["成功", "进行中", "待处理", "已取消", "无任务"]
     for s in status_order:
         if s in status_stats:
             count = status_stats[s]["count"]
@@ -397,46 +402,46 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     writer.writerow([])
     
     # ========== 表2: 文本文件统计 ==========
-    writer.writerow(["【文本文件统计】(doc/docx/txt/md/wps)"])
+    writer.writerow([f"【文本文件统计 - {start_time.strftime('%Y-%m-%d')}】(doc/docx/txt/md/wps)"])
     text_stats = category_stats["文本"]
     writer.writerow(["状态", "数量", "大小"])
     writer.writerow(["总数", text_stats["总数"], format_size(text_stats["总大小"])])
     writer.writerow(["成功", text_stats["成功"], format_size(text_stats["成功大小"])])
     writer.writerow(["进行中", text_stats["进行中"], format_size(text_stats["进行中大小"])])
-    writer.writerow(["失败", text_stats["失败"], format_size(text_stats["失败大小"])])
+    writer.writerow(["待处理", text_stats["待处理"], format_size(text_stats["待处理大小"])])
     writer.writerow(["已取消", text_stats["已取消"], format_size(text_stats["已取消大小"])])
     writer.writerow(["无任务", text_stats["无任务"], format_size(text_stats["无任务大小"])])
     writer.writerow([])
     writer.writerow([])
     
     # ========== 表3: PDF文件统计 ==========
-    writer.writerow(["【PDF文件统计】"])
+    writer.writerow([f"【PDF文件统计 - {start_time.strftime('%Y-%m-%d')}】"])
     pdf_stats = category_stats["PDF"]
     writer.writerow(["状态", "数量", "大小"])
     writer.writerow(["总数", pdf_stats["总数"], format_size(pdf_stats["总大小"])])
     writer.writerow(["成功", pdf_stats["成功"], format_size(pdf_stats["成功大小"])])
     writer.writerow(["进行中", pdf_stats["进行中"], format_size(pdf_stats["进行中大小"])])
-    writer.writerow(["失败", pdf_stats["失败"], format_size(pdf_stats["失败大小"])])
+    writer.writerow(["待处理", pdf_stats["待处理"], format_size(pdf_stats["待处理大小"])])
     writer.writerow(["已取消", pdf_stats["已取消"], format_size(pdf_stats["已取消大小"])])
     writer.writerow(["无任务", pdf_stats["无任务"], format_size(pdf_stats["无任务大小"])])
     writer.writerow([])
     writer.writerow([])
     
     # ========== 表4: 其他文件统计 ==========
-    writer.writerow(["【其他文件统计】"])
+    writer.writerow([f"【其他文件统计 - {start_time.strftime('%Y-%m-%d')}】"])
     other_stats = category_stats["其他"]
     writer.writerow(["状态", "数量", "大小"])
     writer.writerow(["总数", other_stats["总数"], format_size(other_stats["总大小"])])
     writer.writerow(["成功", other_stats["成功"], format_size(other_stats["成功大小"])])
     writer.writerow(["进行中", other_stats["进行中"], format_size(other_stats["进行中大小"])])
-    writer.writerow(["失败", other_stats["失败"], format_size(other_stats["失败大小"])])
+    writer.writerow(["待处理", other_stats["待处理"], format_size(other_stats["待处理大小"])])
     writer.writerow(["已取消", other_stats["已取消"], format_size(other_stats["已取消大小"])])
     writer.writerow(["无任务", other_stats["无任务"], format_size(other_stats["无任务大小"])])
     writer.writerow([])
     writer.writerow([])
     
     # ========== 表5: 文件大小分布统计 ==========
-    writer.writerow(["【文件大小分布统计】"])
+    writer.writerow([f"【文件大小分布统计 - {start_time.strftime('%Y-%m-%d')}】"])
     
     # 按大小分段
     size_ranges = [
@@ -466,8 +471,8 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     writer.writerow([])
     
     # ========== 表6: 按类型和状态的完整统计表 ==========
-    writer.writerow(["【按文件类型和状态的完整统计】"])
-    writer.writerow(["文件类型", "总数", "总大小", "成功", "进行中", "失败", "已取消", "无任务"])
+    writer.writerow([f"【按文件类型和状态的完整统计 - {start_time.strftime('%Y-%m-%d')}】"])
+    writer.writerow(["文件类型", "总数", "总大小", "成功", "进行中", "待处理", "已取消", "无任务"])
     for cat in ["文本", "PDF", "其他"]:
         stats = category_stats[cat]
         writer.writerow([
@@ -476,7 +481,7 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
             format_size(stats["总大小"]),
             stats["成功"],
             stats["进行中"],
-            stats["失败"],
+            stats["待处理"],
             stats["已取消"],
             stats["无任务"],
         ])
@@ -487,7 +492,7 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
         format_size(total_size),
         status_stats.get("成功", {}).get("count", 0),
         status_stats.get("进行中", {}).get("count", 0),
-        status_stats.get("失败", {}).get("count", 0),
+        status_stats.get("待处理", {}).get("count", 0),
         status_stats.get("已取消", {}).get("count", 0),
         status_stats.get("无任务", {}).get("count", 0),
     ])
@@ -495,7 +500,7 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     writer.writerow([])
     
     # ========== 表7: 按一级目录统计（知识库维度）==========
-    writer.writerow(["【按一级目录统计（知识库维度）】"])
+    writer.writerow([f"【按一级目录统计（知识库维度）- {start_time.strftime('%Y-%m-%d')}】"])
     writer.writerow([])
     
     # 按知识库数量排序（根目录优先，然后按知识库数量降序，空目录放最后）
@@ -509,7 +514,7 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     )
     
     # 写入汇总统计表
-    writer.writerow(["一级目录名称", "知识库数", "文档总数", "总大小", "文本", "PDF", "其他", "成功", "进行中", "失败", "已取消", "无任务"])
+    writer.writerow(["一级目录名称", "知识库数", "文档总数", "总大小", "文本", "PDF", "其他", "成功", "进行中", "待处理", "已取消", "无任务"])
     
     for dir_name, stats in sorted_dirs:
         writer.writerow([
@@ -522,7 +527,7 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
             stats["其他"],
             stats["成功"],
             stats["进行中"],
-            stats["失败"],
+            stats["待处理"],
             stats["已取消"],
             stats["无任务"],
         ])
@@ -539,7 +544,7 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
         category_stats["其他"]["总数"],
         status_stats.get("成功", {}).get("count", 0),
         status_stats.get("进行中", {}).get("count", 0),
-        status_stats.get("失败", {}).get("count", 0),
+        status_stats.get("待处理", {}).get("count", 0),
         status_stats.get("已取消", {}).get("count", 0),
         status_stats.get("无任务", {}).get("count", 0),
     ])
@@ -552,7 +557,7 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     writer.writerow([])
     
     # ========== 表8: 按一级目录展开知识库明细 ==========
-    writer.writerow(["【一级目录-知识库明细】"])
+    writer.writerow([f"【一级目录-知识库明细 - {start_time.strftime('%Y-%m-%d')}】"])
     writer.writerow([])
     
     # 只显示有知识库的目录
@@ -575,7 +580,7 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
         writer.writerow([])  # 空行分隔
     
     # ========== 表9: 所有文档明细列表 ==========
-    writer.writerow(["【所有文档明细列表】"])
+    writer.writerow([f"【所有文档明细列表 - {start_time.strftime('%Y-%m-%d')}】"])
     writer.writerow(["序号", "一级目录", "知识库名称", "文档名称", "文件类型", "文件大小", "状态"])
     
     # 按一级目录和知识库排序
@@ -601,11 +606,11 @@ duration = end_time - start_time
 duration_str = str(duration).split('.')[0]
 
 print("\n" + "=" * 70)
-print("统计结果")
+print(f"统计结果 - {start_time.strftime('%Y年%m月%d日')}")
 print("=" * 70)
 
 # 汇总统计表格
-print("\n【汇总统计】")
+print(f"\n【汇总统计 - {start_time.strftime('%Y-%m-%d')}】")
 print(f"┌{'─'*12}┬{'─'*10}┬{'─'*14}┬{'─'*8}┐")
 print(f"│ {'状态':<10} │ {'数量':>8} │ {'大小':>12} │ {'占比':>6} │")
 print(f"├{'─'*12}┼{'─'*10}┼{'─'*14}┼{'─'*8}┤")
@@ -623,19 +628,19 @@ print(f"└{'─'*12}┴{'─'*10}┴{'─'*14}┴{'─'*8}┘")
 print("\n【文本文件统计】(doc/docx/txt/md/wps)")
 text_stats = category_stats["文本"]
 print(f"  总数: {text_stats['总数']} 个 ({format_size(text_stats['总大小'])})")
-print(f"  成功: {text_stats['成功']} | 进行中: {text_stats['进行中']} | 失败: {text_stats['失败']} | 已取消: {text_stats['已取消']} | 无任务: {text_stats['无任务']}")
+print(f"  成功: {text_stats['成功']} | 进行中: {text_stats['进行中']} | 待处理: {text_stats['待处理']} | 已取消: {text_stats['已取消']} | 无任务: {text_stats['无任务']}")
 
 # PDF文件统计
 print("\n【PDF文件统计】")
 pdf_stats = category_stats["PDF"]
 print(f"  总数: {pdf_stats['总数']} 个 ({format_size(pdf_stats['总大小'])})")
-print(f"  成功: {pdf_stats['成功']} | 进行中: {pdf_stats['进行中']} | 失败: {pdf_stats['失败']} | 已取消: {pdf_stats['已取消']} | 无任务: {pdf_stats['无任务']}")
+print(f"  成功: {pdf_stats['成功']} | 进行中: {pdf_stats['进行中']} | 待处理: {pdf_stats['待处理']} | 已取消: {pdf_stats['已取消']} | 无任务: {pdf_stats['无任务']}")
 
 # 其他文件统计
 print("\n【其他文件统计】")
 other_stats = category_stats["其他"]
 print(f"  总数: {other_stats['总数']} 个 ({format_size(other_stats['总大小'])})")
-print(f"  成功: {other_stats['成功']} | 进行中: {other_stats['进行中']} | 失败: {other_stats['失败']} | 已取消: {other_stats['已取消']} | 无任务: {other_stats['无任务']}")
+print(f"  成功: {other_stats['成功']} | 进行中: {other_stats['进行中']} | 待处理: {other_stats['待处理']} | 已取消: {other_stats['已取消']} | 无任务: {other_stats['无任务']}")
 
 # 文件大小分布
 print("\n【文件大小分布】")
@@ -674,7 +679,7 @@ for idx, (dir_name, stats) in enumerate(dirs_with_datasets, 1):
     print(f"{idx:2d}. 【{dir_name}】")
     print(f"    知识库: {stats['知识库数']:>3} 个 | 文档: {stats['总文档数']:>5} 个 | 大小: {format_size(stats['总大小']):>10}")
     print(f"    文本:{stats['文本']:>4} PDF:{stats['PDF']:>4} 其他:{stats['其他']:>4} | "
-          f"成功:{stats['成功']:>4} 进行中:{stats['进行中']:>4} 失败:{stats['失败']:>4}")
+          f"成功:{stats['成功']:>4} 进行中:{stats['进行中']:>4} 待处理:{stats['待处理']:>4}")
     
     # 显示该目录下的知识库（最多显示前3个）
     kb_list = sorted(stats["知识库列表"], key=lambda x: -x["doc_count"])
@@ -706,7 +711,10 @@ if len(sorted_dirs_by_docs) > 10:
 print("\n详细的文档列表请查看CSV报告中的【所有文档明细列表】表")
 
 print("\n" + "=" * 70)
+print(f"统计完成 - {start_time.strftime('%Y-%m-%d')}")
+print("=" * 70)
 print(f"工作空间: {WORKSPACE_NAME}")
+print(f"统计日期: {start_time.strftime('%Y年%m月%d日')}")
 print(f"知识库数: {len(datasets)}")
 print(f"文档总数: {total_docs}")
 print(f"文件总大小: {format_size(total_size)}")

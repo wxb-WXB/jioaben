@@ -29,7 +29,7 @@ sys.path.insert(0, project_root)
 # 导入核心模块
 from src.core import LingyanDataset
 from src.core.models import FolderMap
-from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACE_NAME, LLM_CONFIG
+from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACE_NAME, LLM_CONFIG, PRIORITY_FOLDER_IDS, ONLY_PRIORITY_FOLDER
 
 # ============== 配置区域 ==============
 # 处理配置
@@ -38,13 +38,8 @@ MAX_RETRIES = 1       # 单个文档最大重试次数
 RETRY_INTERVAL = 2    # 重试间隔（秒）
 SEGMENT_CHECK_INTERVAL = 0.5  # 每次检查分段之间的间隔（秒）
 
-# 优先处理的文件夹ID（直接指定folder_id，优先处理该文件夹下的知识库）
-# 如果设置了此值，会优先处理该文件夹下的知识库，然后再处理其他文件夹
-# 示例: PRIORITY_FOLDER_ID = "d9632972-a447-4dea-be8b-bb959e883ee5"
-PRIORITY_FOLDER_ID = "10aab4f5-3191-4e12-a11c-2f3c4efb8204"  # 09正式稿设计图纸汇总至20260114
-
-# 是否只处理优先文件夹（如果为True，只处理PRIORITY_FOLDER_ID指定的文件夹）
-ONLY_PRIORITY_FOLDER = True
+# 优先处理的文件夹ID配置已移至 src/config.py
+# 可通过修改 config.py 中的 PRIORITY_FOLDER_IDS 和 ONLY_PRIORITY_FOLDER 来调整优先级
 # ============== 配置结束 ==============
 
 # 设置日志
@@ -278,19 +273,22 @@ def scan_and_generate(workspace_id, workspace_name):
     datasets_to_process = []
     other_datasets = []
     
-    if PRIORITY_FOLDER_ID:
-        priority_folder_path = get_folder_path(PRIORITY_FOLDER_ID)
-        log.info(f"优先处理文件夹: {priority_folder_path} (ID: {PRIORITY_FOLDER_ID})")
+    if PRIORITY_FOLDER_IDS:
+        log.info(f"优先处理 {len(PRIORITY_FOLDER_IDS)} 个文件夹:")
         
-        try:
-            status, priority_datasets = dataset_api.list_datasets(workspace_id, folder_id=PRIORITY_FOLDER_ID)
-            if status == 200:
-                datasets_to_process.extend(priority_datasets)
-                log.info(f"优先文件夹下找到 {len(priority_datasets)} 个知识库")
-            else:
-                log.error(f"获取优先文件夹知识库失败: {priority_datasets}")
-        except Exception as e:
-            log.error(f"获取优先文件夹知识库失败: {e}")
+        for folder_id in PRIORITY_FOLDER_IDS:
+            priority_folder_path = get_folder_path(folder_id)
+            log.info(f"  - {priority_folder_path} (ID: {folder_id})")
+            
+            try:
+                status, priority_datasets = dataset_api.list_datasets(workspace_id, folder_id=folder_id)
+                if status == 200:
+                    datasets_to_process.extend(priority_datasets)
+                    log.info(f"    找到 {len(priority_datasets)} 个知识库")
+                else:
+                    log.error(f"    获取知识库失败: {priority_datasets}")
+            except Exception as e:
+                log.error(f"    获取知识库失败: {e}")
     
     # 如果需要处理其他文件夹
     if not ONLY_PRIORITY_FOLDER:
@@ -328,7 +326,7 @@ def scan_and_generate(workspace_id, workspace_name):
         folder_id = ds.get("folder_id")
         folder_path = get_folder_path(folder_id)
         
-        is_priority = folder_id == PRIORITY_FOLDER_ID if PRIORITY_FOLDER_ID else False
+        is_priority = folder_id in PRIORITY_FOLDER_IDS if PRIORITY_FOLDER_IDS else False
         prefix = "[优先]" if is_priority else ""
         log.info(f"\n{prefix}[{i+1}/{len(all_datasets_list)}] 扫描知识库: {dataset_name}")
         log.info(f"  目录路径: {folder_path}")
@@ -431,10 +429,11 @@ def main():
     log.info(f"每个成功后间隔: {REQUEST_INTERVAL} 秒")
     log.info(f"失败重试次数: {MAX_RETRIES}, 重试间隔: {RETRY_INTERVAL} 秒")
     
-    if PRIORITY_FOLDER_ID:
-        priority_folder_path = get_folder_path(PRIORITY_FOLDER_ID)
-        log.info(f"优先文件夹: {priority_folder_path}")
-        log.info(f"优先文件夹ID: {PRIORITY_FOLDER_ID}")
+    if PRIORITY_FOLDER_IDS:
+        log.info(f"优先文件夹数量: {len(PRIORITY_FOLDER_IDS)}")
+        for folder_id in PRIORITY_FOLDER_IDS:
+            priority_folder_path = get_folder_path(folder_id)
+            log.info(f"  - {priority_folder_path} (ID: {folder_id})")
         log.info(f"只处理优先文件夹: {'是' if ONLY_PRIORITY_FOLDER else '否'}")
     
     log.info("=" * 60)

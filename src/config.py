@@ -28,7 +28,7 @@ for _dir in [LOGS_DIR, DATA_DIR, FAILED_RECORDS_DIR, SUCCESS_RECORDS_DIR]:
 # =============================================================================
 API_HOST = "https://ai.yxgswater.com:18080"
 API_KEY = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzEyNDI2OTN9.TzkrYNU7kjWewyUqSC7ov50L_zSOu5WgD1SMk4zbBGI"
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzEyOTMxMTN9.MyM9B2b2jZtzjDfdnkF-QGFhGFumIgQHW0_aM1_V7Bc"
 
 # =============================================================================
 # 工作空间配置
@@ -158,3 +158,18 @@ LOCAL_SCAN = {
         r"F:\01 知识库答案文本",
     ],
 }
+
+# =============================================================================
+# 优先处理文件夹配置
+# =============================================================================
+# 优先处理的文件夹ID列表（用于retry_failed_tasks.py、segment_index.py、doc_summary.py）
+# 如果设置了此值，会优先处理这些文件夹下的知识库，然后再处理其他文件夹
+PRIORITY_FOLDER_IDS = [
+    "10aab4f5-3191-4e12-a11c-2f3c4efb8204",  # 09正式稿设计图纸汇总至20260114
+    "152068cb-aa43-40bf-a3c9-558088e6e3a8",  # 安全目标
+    "4100cc74-8e98-4f0c-bc10-470f4545bccb",  # 进度计划管理
+    "65f3a554-9206-45ab-a116-c18d739edfae", # 安全风险管理
+]
+
+# 是否只处理优先文件夹（如果为True，只处理PRIORITY_FOLDER_IDS指定的文件夹）
+ONLY_PRIORITY_FOLDER = True
