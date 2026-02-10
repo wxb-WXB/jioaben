@@ -169,6 +169,9 @@ PRIORITY_FOLDER_IDS = [
     "152068cb-aa43-40bf-a3c9-558088e6e3a8",  # 安全目标
     "4100cc74-8e98-4f0c-bc10-470f4545bccb",  # 进度计划管理
     "65f3a554-9206-45ab-a116-c18d739edfae", # 安全风险管理
+    "127d1ee9-8086-4bb1-80ef-abffba454599", # 安全文档管理
+    "aedb8b38-69c4-4aa3-bbf9-7d2507f05ef5", #隐患排查治理
+
 ]
 
 # 是否只处理优先文件夹（如果为True，只处理PRIORITY_FOLDER_IDS指定的文件夹）
