@@ -182,7 +182,7 @@ def start_task(doc, workspace_id):
 
 def get_document_info(dataset_id, document_id):
     """获取单个文档的最新信息（用于轮询模式）"""
-    url = f"http://10.4.49.66:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}"
+    url = f"https://ai.yxgswater.com:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}"
     
     try:
         response = requests.get(url, headers=HEADERS, timeout=30, verify=False)

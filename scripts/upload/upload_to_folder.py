@@ -584,6 +584,132 @@ UPLOAD_TASKS = [
     #       "folder_id": "e9843052-4247-4e28-8b40-0d997539f005",
     #       "dataset_name": "环保水保政策法规'",
     #    },
+
+        # 科数：信息化管理
+
+    #  {
+    #       "local_folder": r'E:\知识库管理\信息化管理\IT日常管理',
+    #        "folder_id": "44337eb7-527d-46f0-8638-351cc3f76d6c",
+    #        "dataset_name": "IT日常管理'",
+    #    },
+    #      {
+    #       "local_folder": r'E:\知识库管理\信息化管理\网络安全管理',
+    #        "folder_id": "946dfb60-e638-4812-8f70-c4d3d3d086a5",
+    #        "dataset_name": "网络安全管理'",
+    #    },
+
+    #     {
+    #       "local_folder": r'E:\知识库管理\信息化管理\信息化规划',
+    #        "folder_id": "8f332858-5015-4ba0-9de0-0f8848a49359",
+    #        "dataset_name": "信息化规划'",
+    #    },
+    #      {
+    #       "local_folder": r'E:\知识库管理\信息化管理\信息化项目管理',
+    #        "folder_id": "1bca562f-9290-48b2-888e-20d33afe591e",
+    #        "dataset_name": "信息化项目管理'",
+    #    },
+    #     {
+    #       "local_folder": r'E:\知识库管理\信息化管理\信息化运维管理',
+    #        "folder_id": "76872a03-52dc-49c4-87d6-5575190f51ec",
+    #        "dataset_name": "信息化运维管理'",
+    #    },
+    #    {
+    #       "local_folder": r'E:\知识库管理\信息化管理\智慧工地',
+    #        "folder_id": "146e8374-bc44-4515-a75c-a5c64a9103b6",
+    #        "dataset_name": "智慧工地'",
+    #    },
+
+
+
+
+        {
+           "local_folder": r'E:\04技术管理\02招标合同履约考核',
+            "folder_id": "2b937293-4bce-4228-a795-f381bfc34b6e",
+            "dataset_name": "采购合同",
+        },
+
+         {
+           "local_folder": r'E:\04技术管理\03宣传展板设计文件技术要求',
+            "folder_id": "2c63dd8c-6e46-4665-86d4-55cfb5bc6d5a",
+            "dataset_name": "机电设计管理",
+        },
+         {
+           "local_folder": r'E:\04技术管理\05专题研究',
+            "folder_id": "e39ffba6-6606-449f-abee-2c58ac07d443",
+            "dataset_name": "技术管理",
+        },
+         {
+           "local_folder": r'E:\04技术管理\06交流学习培训材料',
+            "folder_id": "e39ffba6-6606-449f-abee-2c58ac07d443",
+            "dataset_name": "技术管理",
+        },
+         {
+           "local_folder": r'E:\04技术管理\07培训交流调研座谈',
+            "folder_id": "e39ffba6-6606-449f-abee-2c58ac07d443",
+            "dataset_name": "技术管理",
+        },
+        {
+           "local_folder": r'E:\04技术管理\08质量管理',
+            "folder_id": "e904478a-ad2c-42dc-ad5c-cc21d7f967a7",
+            "dataset_name": "质量监督",
+        },
+
+         {
+           "local_folder": r'E:\04技术管理\10科研材料',
+            "folder_id": "bd038bbc-45ad-4b2d-85b1-93ac1bdbd3c1",
+            "dataset_name": "科研上报材料",
+        },
+         {
+           "local_folder": r'E:\04技术管理\11标准规范性公文',
+            "folder_id": "e7d33f82-8e97-4472-b0d9-7598ddf1fec8",
+            "dataset_name": "综合文秘",
+        },
+         {
+           "local_folder": r'E:\04技术管理\13公司制度内部考核',
+            "folder_id": "02ccb7be-32c8-4587-b3cf-a523621c3443",
+            "dataset_name": "办公与后勤管理类",
+        },
+         {
+           "local_folder": r'E:\04技术管理\14征地移民工作',
+            "folder_id": "d4181c33-995f-448a-8fa6-c74cedcd22ed",
+            "dataset_name": "征地移民变更管理",
+        },
+         {
+           "local_folder": r'E:\04技术管理\16工程创优',
+            "folder_id": "bd038bbc-45ad-4b2d-85b1-93ac1bdbd3c1",
+            "dataset_name": "科研上报材料",
+        },
+         {
+           "local_folder": r'E:\04技术管理\17安全管理',
+            "folder_id": "152068cb-aa43-40bf-a3c9-558088e6e3a8",
+            "dataset_name": "安全目标",
+        },
+         {
+           "local_folder": r'E:\04技术管理\18进度管理材料',
+            "folder_id": "4100cc74-8e98-4f0c-bc10-470f4545bccb",
+            "dataset_name": "进度计划管理",
+        },
+         {
+           "local_folder": r'E:\04技术管理\19PCCP采购标管理',
+            "folder_id": "4100cc74-8e98-4f0c-bc10-470f4545bccb",
+            "dataset_name": "进度计划管理",
+        },
+         {
+           "local_folder": r'E:\04技术管理\20原材设计指标',
+            "folder_id": "cea13953-ab43-4fb1-ac03-0d91553f7565",
+            "dataset_name": "标准规范",
+        },
+         {
+           "local_folder": r'E:\04技术管理\21造价指标',
+            "folder_id": "ebcd1e83-089b-40e2-8ea7-5993269c3939",
+            "dataset_name": "成本管理类",
+        },
+         {
+           "local_folder": r'E:\04技术管理\22百千万工程',
+            "folder_id": "8801e146-5d29-4a3d-9941-9a333dfca7c9",
+            "dataset_name": "社会责任",
+        },
+       
 ]
 
 # 运行模式

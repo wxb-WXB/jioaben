@@ -43,6 +43,14 @@ GENERATE_CONFIG = {
 REQUEST_INTERVAL = 2   # 每个分段成功后等待的时间（秒）
 MAX_RETRIES = 3        # 单个分段最大重试次数
 RETRY_INTERVAL = 10    # 重试间隔（秒）
+
+# 优先处理的文件夹ID（直接指定folder_id，优先处理该文件夹下的知识库）
+# 如果设置了此值，会优先处理该文件夹下的知识库，然后再处理其他文件夹
+# 示例: PRIORITY_FOLDER_ID = "d9632972-a447-4dea-be8b-bb959e883ee5"
+PRIORITY_FOLDER_ID = "10aab4f5-3191-4e12-a11c-2f3c4efb8204"  # 09正式稿设计图纸汇总至20260114
+
+# 是否只处理优先文件夹（如果为True，只处理PRIORITY_FOLDER_ID指定的文件夹）
+ONLY_PRIORITY_FOLDER = True
 # ============== 配置结束 ==============
 
 # 设置日志
@@ -95,7 +103,7 @@ def is_vector_success(doc):
 
 def get_document_segments(dataset_id, document_id):
     """获取文档的分段列表"""
-    url = f"http://10.4.49.66:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}/segments"
+    url = f"https://ai.yxgswater.com:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}/segments"
     
     all_segments = []
     page = 1
@@ -145,7 +153,7 @@ def get_document_segments(dataset_id, document_id):
 
 def get_segment_index_tasks(dataset_id, document_id):
     """获取分段索引任务状态"""
-    url = f"http://10.4.49.66:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}/segment-index-tasks"
+    url = f"https://10.4.49.66:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}/segment-index-tasks"
     
     params = {
         "dataset_id": dataset_id,
@@ -195,7 +203,7 @@ def get_segment_index_tasks(dataset_id, document_id):
 
 def regenerate_segment_index(dataset_id, document_id, segment_id):
     """为单个分段生成索引（标题、摘要、问题）"""
-    url = f"http://10.4.49.66:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}/segments/{segment_id}/indexes/regenerate"
+    url = f"https://10.4.49.66:18080/api/v1/console/datasets/{dataset_id}/documents/{document_id}/segments/{segment_id}/indexes/regenerate"
     
     params = {
         "dataset_id": dataset_id,
@@ -228,7 +236,7 @@ def regenerate_segment_index(dataset_id, document_id, segment_id):
             else:
                 return False, f"API错误: {result.get('msg')}"
         else:
-            return False, f"HTTP {response.status_code}"
+            return False, f"https {response.status_code}"
     except requests.exceptions.Timeout:
         return False, "请求超时"
     except Exception as e:
@@ -320,25 +328,63 @@ def process_document_segments(dataset_id, document_id, document_name, folder_pat
 def scan_and_generate(workspace_id, workspace_name):
     """扫描知识库，为向量化成功的文档生成分段索引"""
     log.info(f"正在扫描 [{workspace_name}] 的知识库...")
-    status, datasets = dataset_api.list_datasets(workspace_id)
     
-    if status != 200:
-        log.error(f"获取知识库列表失败: {datasets}")
+    # 如果指定了优先文件夹，先处理优先文件夹
+    datasets_to_process = []
+    other_datasets = []
+    
+    if PRIORITY_FOLDER_ID:
+        priority_folder_path = get_folder_path(PRIORITY_FOLDER_ID)
+        log.info(f"优先处理文件夹: {priority_folder_path} (ID: {PRIORITY_FOLDER_ID})")
+        
+        try:
+            status, priority_datasets = dataset_api.list_datasets(workspace_id, folder_id=PRIORITY_FOLDER_ID)
+            if status == 200:
+                datasets_to_process.extend(priority_datasets)
+                log.info(f"优先文件夹下找到 {len(priority_datasets)} 个知识库")
+            else:
+                log.error(f"获取优先文件夹知识库失败: {priority_datasets}")
+        except Exception as e:
+            log.error(f"获取优先文件夹知识库失败: {e}")
+    
+    # 如果需要处理其他文件夹
+    if not ONLY_PRIORITY_FOLDER:
+        try:
+            status, all_datasets = dataset_api.list_datasets(workspace_id)
+            if status == 200:
+                # 过滤掉已经在优先列表中的知识库
+                priority_dataset_ids = {ds.get("id") for ds in datasets_to_process}
+                for ds in all_datasets:
+                    if ds.get("id") not in priority_dataset_ids:
+                        other_datasets.append(ds)
+                log.info(f"其他文件夹找到 {len(other_datasets)} 个知识库")
+            else:
+                log.error(f"获取其他知识库列表失败: {all_datasets}")
+        except Exception as e:
+            log.error(f"获取其他知识库列表失败: {e}")
+    
+    # 合并列表：优先文件夹在前
+    all_datasets_list = datasets_to_process + other_datasets
+    
+    if not all_datasets_list:
+        log.warning("没有找到需要处理的知识库")
         return 0, 0
     
-    log.info(f"找到 {len(datasets)} 个知识库")
+    log.info(f"总共需要处理 {len(all_datasets_list)} 个知识库")
     log.info("=" * 60)
     
     total_success = 0
     total_fail = 0
     
-    for i, ds in enumerate(datasets):
+    for i, ds in enumerate(all_datasets_list):
         dataset_id = ds.get("id")
         dataset_name = ds.get("name")
         folder_id = ds.get("folder_id")
         folder_path = get_folder_path(folder_id)
         
-        log.info(f"\n[{i+1}/{len(datasets)}] 扫描知识库: {dataset_name}")
+        is_priority = folder_id == PRIORITY_FOLDER_ID if PRIORITY_FOLDER_ID else False
+        prefix = "[优先]" if is_priority else ""
+        log.info(f"\n{prefix}[{i+1}/{len(all_datasets_list)}] 扫描知识库: {dataset_name}")
         log.info(f"  目录路径: {folder_path}")
         
         try:
@@ -385,6 +431,13 @@ def main():
     log.info(f"模式: 逐个处理（成功一个再下一个）")
     log.info(f"每个分段成功后间隔: {REQUEST_INTERVAL} 秒")
     log.info(f"失败重试次数: {MAX_RETRIES}, 重试间隔: {RETRY_INTERVAL} 秒")
+    
+    if PRIORITY_FOLDER_ID:
+        priority_folder_path = get_folder_path(PRIORITY_FOLDER_ID)
+        log.info(f"优先文件夹: {priority_folder_path}")
+        log.info(f"优先文件夹ID: {PRIORITY_FOLDER_ID}")
+        log.info(f"只处理优先文件夹: {'是' if ONLY_PRIORITY_FOLDER else '否'}")
+    
     log.info("=" * 60)
     
     start_time = datetime.now()
