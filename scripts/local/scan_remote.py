@@ -6,6 +6,7 @@
 - 统计知识库的向量化状态
 - 分类显示：成功、进行中、待处理、已取消、无任务
 - 生成Excel格式的统计报告（CSV格式）
+- 自动上传统计报告到远程服务器
 
 使用方法：
 python scripts/local/scan_remote.py
@@ -23,7 +24,7 @@ sys.path.insert(0, project_root)
 # 导入核心模块
 from src.core import LingyanDataset
 from src.core.models import FolderMap
-from src.config import API_KEY, WORKSPACES, LOGS_DIR
+from src.config import API_KEY, WORKSPACES, LOGS_DIR, REMOTE_SERVER
 
 # 只统计第一个工作空间
 TARGET_WORKSPACE = WORKSPACES[0]
@@ -723,3 +724,92 @@ print("=" * 70)
 
 print(f"\n📊 统计报告已保存到: {csv_filename}")
 print("   可直接用 Excel 打开此 CSV 文件")
+
+# ============================================================================
+# 上传到远程服务器
+# ============================================================================
+
+def upload_to_server(local_file, remote_dir):
+    """
+    使用 SFTP 上传文件到远程服务器
+    
+    Args:
+        local_file: 本地文件路径
+        remote_dir: 远程服务器目录
+    
+    Returns:
+        bool: 上传是否成功
+    """
+    try:
+        import paramiko
+    except ImportError:
+        print("\n⚠️  警告: 未安装 paramiko 库，无法上传到服务器")
+        print("   请运行: pip install paramiko")
+        return False
+    
+    host = REMOTE_SERVER["host"]
+    port = REMOTE_SERVER.get("port", 22)
+    username = REMOTE_SERVER["username"]
+    password = REMOTE_SERVER["password"]
+    
+    filename = os.path.basename(local_file)
+    remote_path = f"{remote_dir}/{filename}"
+    
+    print(f"\n📤 正在上传到服务器 {host}...")
+    print(f"   本地文件: {local_file}")
+    print(f"   远程路径: {remote_path}")
+    
+    try:
+        # 创建 SSH 客户端
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        
+        # 连接服务器
+        ssh.connect(host, port=port, username=username, password=password, timeout=30)
+        
+        # 确保远程目录存在
+        stdin, stdout, stderr = ssh.exec_command(f"mkdir -p {remote_dir}")
+        stdout.read()  # 等待命令完成
+        
+        # 创建 SFTP 会话
+        sftp = ssh.open_sftp()
+        
+        # 上传文件
+        sftp.put(local_file, remote_path)
+        
+        # 获取远程文件大小验证上传
+        remote_stat = sftp.stat(remote_path)
+        local_size = os.path.getsize(local_file)
+        
+        sftp.close()
+        ssh.close()
+        
+        if remote_stat.st_size == local_size:
+            print(f"   ✅ 上传成功! 文件大小: {format_size(local_size)}")
+            return True
+        else:
+            print(f"   ⚠️  上传可能不完整，本地: {local_size} 字节，远程: {remote_stat.st_size} 字节")
+            return False
+            
+    except Exception as e:
+        print(f"   ❌ 上传失败: {e}")
+        return False
+
+
+# 执行上传
+print("\n" + "=" * 70)
+print("上传统计报告到远程服务器")
+print("=" * 70)
+
+upload_success = upload_to_server(csv_filename, REMOTE_SERVER["upload_dir"])
+
+if upload_success:
+    remote_path = f"{REMOTE_SERVER['upload_dir']}/{os.path.basename(csv_filename)}"
+    print(f"\n📁 文件已上传到服务器:")
+    print(f"   服务器: {REMOTE_SERVER['host']}")
+    print(f"   路径: {remote_path}")
+    print(f"\n💡 获取文件方式:")
+    print(f"   1. 使用 SCP: scp root@{REMOTE_SERVER['host']}:{remote_path} ./")
+    print(f"   2. 使用 SFTP 客户端连接服务器下载")
+else:
+    print("\n⚠️  文件未能上传到服务器，请检查网络或服务器配置")

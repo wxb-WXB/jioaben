@@ -176,3 +176,14 @@ PRIORITY_FOLDER_IDS = [
 
 # 是否只处理优先文件夹（如果为True，只处理PRIORITY_FOLDER_IDS指定的文件夹）
 ONLY_PRIORITY_FOLDER = True
+
+# =============================================================================
+# 远程服务器配置（用于上传统计报告等文件）
+# =============================================================================
+REMOTE_SERVER = {
+    "host": "10.4.49.67",
+    "port": 22,
+    "username": "root",
+    "password": "2Vu&*6+f!adc",
+    "upload_dir": "/data/need_upload_file",  # 上传目标目录
+}
