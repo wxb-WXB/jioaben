@@ -40,7 +40,7 @@ from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACES, PRIORITY_F
 workspace_ids = [("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "环北知识库")]
 
 # 只处理指定目录下的知识库（为空则处理所有目录）
-TARGET_FOLDER_PATH = "环北"
+TARGET_FOLDER_PATH = ""  # 空值=处理所有目录
 
 # 优先处理的文件夹ID配置已移至 src/config.py
 # 可通过修改 config.py 中的 PRIORITY_FOLDER_IDS 和 ONLY_PRIORITY_FOLDER 来调整优先级
@@ -85,6 +85,11 @@ EXCLUDE_FILE_TYPES = None
 # 文档状态过滤
 # ------------------------------
 RETRY_STATUS = ['error', 'failed', 'cancelled', 'no_task']
+
+# ------------------------------
+# 路径长度限制（超长路径直接跳过，不启动任务）
+# ------------------------------
+MAX_PATH_LENGTH = 150   # 完整路径超过此字符数则跳过
 
 # ------------------------------
 # 向量化任务配置
@@ -252,6 +257,7 @@ def print_config():
         print(f"  处理文件类型: 全部")
     
     print(f"  重试状态: {', '.join(RETRY_STATUS)}")
+    print(f"  路径长度限制: {MAX_PATH_LENGTH} 字符（超长跳过）")
     print("="*60)
 
 
@@ -348,6 +354,10 @@ def collect_all_docs():
                         full_path = f"{folder_path}/{dataset_name}/{doc_name}"
                     else:
                         full_path = f"{dataset_name}/{doc_name}"
+                    
+                    # 超长路径直接跳过，不加入待处理列表
+                    if len(full_path) > MAX_PATH_LENGTH:
+                        continue
                     
                     all_docs.append({
                         'dataset_id': dataset_id,
@@ -480,15 +490,19 @@ def run_batch_mode():
                     if not should_process_file(doc_type):
                         continue
                     
-                    found_count += 1
-                    total_started += 1
-                    batch_count += 1
-                    
                     # 构建路径
                     if folder_path and folder_path != "根目录":
                         full_path = f"{folder_path}/{dataset_name}/{doc_name}"
                     else:
                         full_path = f"{dataset_name}/{doc_name}"
+                    
+                    # 超长路径直接跳过，不启动任务
+                    if len(full_path) > MAX_PATH_LENGTH:
+                        continue
+                    
+                    found_count += 1
+                    total_started += 1
+                    batch_count += 1
                     
                     print(f"\n  [批次{batch_num}][{batch_count}/{BATCH_SIZE}] 启动: {doc_name} [type={doc_type}]")
                     print(f"    路径: {full_path}")
@@ -572,7 +586,7 @@ def run_batch_mode():
 
 
 def run_polling_mode():
-    """轮询模式：始终保持N个任务在运行，完成一个立即补充一个"""
+    """轮询模式：边扫描边处理，始终保持N个任务在运行"""
     from datetime import datetime
     
     start_time = datetime.now()
@@ -584,74 +598,244 @@ def run_polling_mode():
     
     print_config()
     
-    # 先收集所有需要处理的文档
     print("\n" + "="*60)
-    print("第一阶段：收集需要处理的文档")
-    print("="*60)
-    
-    all_docs = collect_all_docs()
-    
-    if not all_docs:
-        print("\n没有需要处理的文档")
-        return
-    
-    print(f"\n共收集到 {len(all_docs)} 个需要处理的文档")
-    
-    # 第二阶段：滑动窗口处理
-    print("\n" + "="*60)
-    print("第二阶段：滑动窗口处理")
+    print("边扫描边处理模式")
     print(f"窗口大小: {WINDOW_SIZE}, 轮询间隔: {POLL_INTERVAL}秒")
     print("="*60)
     
     running_tasks = {}  # document_id -> {doc_info, start_time}
-    pending_docs = list(all_docs)
     
     total_success = 0
     total_fail = 0
     processed_count = 0
-    total_docs = len(all_docs)
+    scanned_datasets = 0
     
     success_docs = []
     failed_docs = []
     
-    while pending_docs or running_tasks:
-        # 填充窗口
-        while len(running_tasks) < WINDOW_SIZE and pending_docs:
-            doc = pending_docs.pop(0)
-            document_id = doc['document_id']
-            
-            processed_count += 1
-            print(f"\n[{processed_count}/{total_docs}] 启动: {doc['name']} [type={doc['type']}]")
-            print(f"  路径: {doc['path']}")
-            
-            success, result = start_task(doc, doc['workspace_id'])
-            
-            if success:
-                running_tasks[document_id] = {
-                    'doc': doc,
-                    'start_time': time.time()
-                }
-                print(f"  ✓ 已启动，当前运行中: {len(running_tasks)}")
-            else:
-                print(f"  ✗ 启动失败: {result}")
-                total_fail += 1
-                failed_docs.append({
-                    'name': doc['name'],
-                    'path': doc['path'],
-                    'type': doc['type'],
-                    'error': str(result),
-                })
-            
-            time.sleep(REQUEST_INTERVAL)
+    # 遍历所有工作空间
+    for ws_id, ws_name in workspace_ids:
+        print(f"\n正在扫描 [{ws_name}] 的知识库...")
         
-        if not running_tasks:
-            break
+        # 如果指定了优先文件夹，先处理优先文件夹
+        datasets_to_process = []
+        other_datasets = []
         
-        # 检查运行中的任务
+        if PRIORITY_FOLDER_IDS:
+            print(f"优先处理 {len(PRIORITY_FOLDER_IDS)} 个文件夹:")
+            
+            for folder_id in PRIORITY_FOLDER_IDS:
+                priority_folder_path = get_folder_path(folder_id)
+                print(f"  - {priority_folder_path} (ID: {folder_id})")
+                
+                try:
+                    status, priority_datasets = dataset_api.list_datasets(ws_id, folder_id=folder_id)
+                    if status == 200:
+                        datasets_to_process.extend(priority_datasets)
+                        print(f"    找到 {len(priority_datasets)} 个知识库")
+                except Exception as e:
+                    print(f"    获取知识库失败: {e}")
+        
+        # 如果需要处理其他文件夹
+        if not ONLY_PRIORITY_FOLDER:
+            try:
+                status, all_datasets = dataset_api.list_datasets(ws_id)
+                if status == 200:
+                    # 过滤掉已经在优先列表中的知识库
+                    priority_dataset_ids = {ds.get("id") for ds in datasets_to_process}
+                    for ds in all_datasets:
+                        if ds.get("id") not in priority_dataset_ids:
+                            folder_id = ds.get("folder_id")
+                            folder_path = get_folder_path(folder_id)
+                            # 如果设置了TARGET_FOLDER_PATH，需要匹配路径
+                            if TARGET_FOLDER_PATH and TARGET_FOLDER_PATH not in folder_path:
+                                continue
+                            other_datasets.append(ds)
+                    print(f"其他文件夹找到 {len(other_datasets)} 个知识库")
+            except Exception as e:
+                print(f"获取其他知识库列表失败: {e}")
+        
+        # 合并列表：优先文件夹在前
+        all_datasets_list = datasets_to_process + other_datasets
+        
+        if not all_datasets_list:
+            print("没有找到需要处理的知识库")
+            continue
+        
+        print(f"总共需要处理 {len(all_datasets_list)} 个知识库")
+        
+        # 逐个扫描知识库并处理
+        for i, ds in enumerate(all_datasets_list):
+            dataset_id = ds.get("id")
+            dataset_name = ds.get("name")
+            folder_id = ds.get("folder_id")
+            folder_path = get_folder_path(folder_id)
+            
+            # 如果设置了TARGET_FOLDER_PATH且不在优先文件夹中，需要匹配路径
+            if not PRIORITY_FOLDER_IDS or folder_id not in PRIORITY_FOLDER_IDS:
+                if TARGET_FOLDER_PATH and TARGET_FOLDER_PATH not in folder_path:
+                    continue
+            
+            is_priority = folder_id in PRIORITY_FOLDER_IDS if PRIORITY_FOLDER_IDS else False
+            prefix = "[优先]" if is_priority else ""
+            scanned_datasets += 1
+            print(f"\n{prefix}[知识库 {scanned_datasets}/{len(all_datasets_list)}] 扫描: {dataset_name}")
+            
+            try:
+                status, documents = list_documents_with_retry(dataset_id, ws_id)
+                if status != 200:
+                    print("  获取文档失败")
+                    continue
+                
+                # 收集该知识库中需要处理的文档
+                docs_in_dataset = []
+                for doc in documents:
+                    doc_status, _ = get_doc_status(doc)
+                    
+                    if doc_status not in RETRY_STATUS:
+                        continue
+                    
+                    doc_name = doc.get("name", "")
+                    doc_type = doc.get("type", "")
+                    
+                    if not should_process_file(doc_type):
+                        continue
+                    
+                    # 构建路径
+                    if folder_path and folder_path != "根目录":
+                        full_path = f"{folder_path}/{dataset_name}/{doc_name}"
+                    else:
+                        full_path = f"{dataset_name}/{doc_name}"
+                    
+                    # 超长路径直接跳过
+                    if len(full_path) > MAX_PATH_LENGTH:
+                        continue
+                    
+                    docs_in_dataset.append({
+                        'dataset_id': dataset_id,
+                        'document_id': doc.get("id"),
+                        'name': doc_name,
+                        'type': doc_type,
+                        'path': full_path,
+                        'workspace_id': ws_id,
+                    })
+                
+                if not docs_in_dataset:
+                    print("  无需处理的文档")
+                    continue
+                
+                print(f"  发现 {len(docs_in_dataset)} 个待处理文档")
+                
+                # 逐个启动该知识库的文档，并维护滑动窗口
+                for doc in docs_in_dataset:
+                    # 填充窗口：如果窗口未满，直接启动
+                    while len(running_tasks) >= WINDOW_SIZE:
+                        # 窗口已满，等待有任务完成
+                        completed_ids = []
+                        timeout_ids = []
+                        
+                        for doc_id, task_info in list(running_tasks.items()):
+                            task_doc = task_info['doc']
+                            start_time_task = task_info['start_time']
+                            elapsed = time.time() - start_time_task
+                            
+                            # 超时检查
+                            if elapsed > MAX_WAIT_TIME:
+                                timeout_ids.append(doc_id)
+                                print(f"  ⏱ 超时: {task_doc['name']} ({int(elapsed)}秒)")
+                                continue
+                            
+                            # 获取最新状态
+                            success_check, doc_info = get_document_info(task_doc['dataset_id'], doc_id)
+                            if not success_check:
+                                continue
+                            
+                            doc_status, _ = get_doc_status(doc_info)
+                            
+                            if doc_status in ["completed", "success"]:
+                                completed_ids.append((doc_id, True))
+                                print(f"  ✓ 完成: {task_doc['name']} ({int(elapsed)}秒)")
+                            elif doc_status in ["failed", "error"]:
+                                completed_ids.append((doc_id, False))
+                                print(f"  ✗ 失败: {task_doc['name']}")
+                        
+                        # 处理完成的任务
+                        for doc_id, is_success in completed_ids:
+                            task_doc = running_tasks[doc_id]['doc']
+                            del running_tasks[doc_id]
+                            if is_success:
+                                total_success += 1
+                                success_docs.append({
+                                    'name': task_doc['name'],
+                                    'path': task_doc['path'],
+                                    'type': task_doc['type'],
+                                })
+                            else:
+                                total_fail += 1
+                                failed_docs.append({
+                                    'name': task_doc['name'],
+                                    'path': task_doc['path'],
+                                    'type': task_doc['type'],
+                                    'error': '任务执行失败',
+                                })
+                        
+                        # 处理超时的任务
+                        for doc_id in timeout_ids:
+                            task_doc = running_tasks[doc_id]['doc']
+                            del running_tasks[doc_id]
+                            total_fail += 1
+                            failed_docs.append({
+                                'name': task_doc['name'],
+                                'path': task_doc['path'],
+                                'type': task_doc['type'],
+                                'error': f'超时({MAX_WAIT_TIME}秒)',
+                            })
+                        
+                        # 如果没有任何任务完成或超时，等待一段时间
+                        if not completed_ids and not timeout_ids:
+                            print(f"  等待窗口释放... 运行中: {len(running_tasks)}")
+                            time.sleep(POLL_INTERVAL)
+                    
+                    # 现在窗口有空位，启动新任务
+                    document_id = doc['document_id']
+                    processed_count += 1
+                    
+                    print(f"  [{processed_count}] 启动: {doc['name']} [type={doc['type']}]")
+                    
+                    success, result = start_task(doc, doc['workspace_id'])
+                    
+                    if success:
+                        running_tasks[document_id] = {
+                            'doc': doc,
+                            'start_time': time.time()
+                        }
+                        print(f"    ✓ 已启动，当前运行中: {len(running_tasks)}")
+                    else:
+                        print(f"    ✗ 启动失败: {result}")
+                        total_fail += 1
+                        failed_docs.append({
+                            'name': doc['name'],
+                            'path': doc['path'],
+                            'type': doc['type'],
+                            'error': str(result),
+                        })
+                    
+                    time.sleep(REQUEST_INTERVAL)
+                
+            except Exception as e:
+                print(f"  出错: {e}")
+                time.sleep(RETRY_DELAY)
+    
+    # 等待所有剩余任务完成
+    print(f"\n{'='*60}")
+    print(f"所有知识库已扫描完成，等待剩余 {len(running_tasks)} 个任务完成...")
+    print(f"{'='*60}")
+    
+    while running_tasks:
         completed_ids = []
         timeout_ids = []
         
-        for doc_id, task_info in running_tasks.items():
+        for doc_id, task_info in list(running_tasks.items()):
             doc = task_info['doc']
             start_time_task = task_info['start_time']
             elapsed = time.time() - start_time_task
@@ -710,9 +894,8 @@ def run_polling_mode():
         
         # 显示状态
         if running_tasks:
-            remaining = len(pending_docs)
             running = len(running_tasks)
-            print(f"\n  状态: 运行中 {running}, 待处理 {remaining}, 成功 {total_success}, 失败 {total_fail}")
+            print(f"  状态: 运行中 {running}, 成功 {total_success}, 失败 {total_fail}")
             time.sleep(POLL_INTERVAL)
     
     end_time = datetime.now()
@@ -726,11 +909,11 @@ def run_polling_mode():
     print(f"  开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  结束时间: {end_time.strftime('%Y-%m-%d %H:%M:%S')}")
     print(f"  总耗时: {duration_str}")
-    print(f"  处理文档数: {total_docs}")
+    print(f"  处理文档数: {processed_count}")
     print(f"  成功: {total_success}")
     print(f"  失败: {total_fail}")
-    if total_docs > 0:
-        success_rate = total_success / total_docs * 100
+    if processed_count > 0:
+        success_rate = total_success / processed_count * 100
         print(f"  成功率: {success_rate:.1f}%")
     
     # 显示失败列表

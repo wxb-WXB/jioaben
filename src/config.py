@@ -165,17 +165,23 @@ LOCAL_SCAN = {
 # 优先处理的文件夹ID列表（用于retry_failed_tasks.py、segment_index.py、doc_summary.py）
 # 如果设置了此值，会优先处理这些文件夹下的知识库，然后再处理其他文件夹
 PRIORITY_FOLDER_IDS = [
-    "10aab4f5-3191-4e12-a11c-2f3c4efb8204",  # 09正式稿设计图纸汇总至20260114
-    "152068cb-aa43-40bf-a3c9-558088e6e3a8",  # 安全目标
-    "4100cc74-8e98-4f0c-bc10-470f4545bccb",  # 进度计划管理
-    "65f3a554-9206-45ab-a116-c18d739edfae", # 安全风险管理
-    "127d1ee9-8086-4bb1-80ef-abffba454599", # 安全文档管理
-    "aedb8b38-69c4-4aa3-bbf9-7d2507f05ef5", #隐患排查治理
+    # "10aab4f5-3191-4e12-a11c-2f3c4efb8204",  # 09正式稿设计图纸汇总至20260114--已完成
+    "10aab4f5-3191-4e12-a11c-2f3c4efb8204",
+    
+    
+
+
 
 ]
 
 # 是否只处理优先文件夹（如果为True，只处理PRIORITY_FOLDER_IDS指定的文件夹）
-ONLY_PRIORITY_FOLDER = True
+ONLY_PRIORITY_FOLDER = False
+
+
+
+
+
+
 
 # =============================================================================
 # 远程服务器配置（用于上传统计报告等文件）
