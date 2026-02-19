@@ -6,10 +6,18 @@
 - 遍历知识库，检测失败/无任务的文档
 - 支持两种模式：批次模式 和 轮询模式
 - 批次模式：每次启动N个任务，等待一段时间，继续下一批
-- 轮询模式：始终保持N个任务在运行，完成一个立即补充一个
+- 轮询模式：边扫描边处理，始终保持N个任务在运行，完成一个立即补充一个
+- 失败记录功能：自动记录失败文档，支持跳过或专门重试失败记录
 
 使用方法：
 python scripts/generate/retry_failed_tasks.py
+
+失败记录配置：
+- ENABLE_FAILED_RECORD = True：启用失败记录功能
+- SKIP_RECORDED_FAILED = True：跳过已记录的失败文档（正常模式）
+- PROCESS_ONLY_FAILED_RECORD = False：只处理失败记录（专门重试失败的）
+  * 设为 True 时，只重试之前失败过的文档
+  * 设为 False 时，正常处理所有失败/无任务的文档
 """
 import sys
 import time
@@ -28,7 +36,9 @@ sys.path.insert(0, project_root)
 # 导入核心模块
 from src.core import LingyanDataset
 from src.core.models import FolderMap
-from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACES, PRIORITY_FOLDER_IDS, ONLY_PRIORITY_FOLDER
+from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACES, PRIORITY_FOLDER_IDS, ONLY_PRIORITY_FOLDER, FAILED_RECORDS_DIR
+import json
+from datetime import datetime
 
 # ============================================================
 # 配置参数 - 修改这里来控制脚本行为
@@ -55,15 +65,15 @@ RUN_MODE = 'polling'
 # ------------------------------
 # 批次模式配置
 # ------------------------------
-BATCH_SIZE = 40          # 每批启动的任务数
-BATCH_WAIT = 120         # 每批完成后等待时间（秒）
+BATCH_SIZE = 60          # 每批启动的任务数
+BATCH_WAIT = 60         # 每批完成后等待时间（秒）
 REQUEST_INTERVAL = 0.4   # 每次启动任务之间的间隔（秒）
 
 # ------------------------------
 # 轮询模式配置
 # ------------------------------
 WINDOW_SIZE = 30         # 同时运行的任务数量（滑动窗口大小）
-POLL_INTERVAL = 5        # 检查任务状态的间隔（秒）
+POLL_INTERVAL = 10        # 检查任务状态的间隔（秒）
 MAX_WAIT_TIME = 3600     # 单个任务最大等待时间（秒），超时则跳过
 
 # ------------------------------
@@ -76,10 +86,9 @@ RETRY_DELAY = 5          # 重试间隔（秒）
 # 文件类型过滤（基于API返回的type字段）
 # ------------------------------
 # INCLUDE_FILE_TYPES = {'doc', 'docx', 'txt', 'md', 'wps'}
-INCLUDE_FILE_TYPES = {'pdf'}
-# INCLUDE_FILE_TYPES = None  # 处理所有类型
-
-EXCLUDE_FILE_TYPES = None
+# INCLUDE_FILE_TYPES = {'pdf'}
+INCLUDE_FILE_TYPES = None  # 处理所有类型
+EXCLUDE_FILE_TYPES = None  # 要排除的类型集合，None 表示不排除任何类型
 
 # ------------------------------
 # 文档状态过滤
@@ -90,6 +99,14 @@ RETRY_STATUS = ['error', 'failed', 'cancelled', 'no_task']
 # 路径长度限制（超长路径直接跳过，不启动任务）
 # ------------------------------
 MAX_PATH_LENGTH = 150   # 完整路径超过此字符数则跳过
+
+# ------------------------------
+# 失败记录配置
+# ------------------------------
+ENABLE_FAILED_RECORD = True          # 是否启用失败记录功能
+SKIP_RECORDED_FAILED = True          # 是否跳过已记录的失败文档
+PROCESS_ONLY_FAILED_RECORD = False   # 是否只处理失败记录（True=只重试失败记录，False=正常模式）
+FAILED_RECORD_FILE = os.path.join(FAILED_RECORDS_DIR, "retry_failed_tasks.json")  # 失败记录文件路径
 
 # ------------------------------
 # 向量化任务配置
@@ -108,6 +125,9 @@ urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 dataset_api = LingyanDataset(API_KEY)
 
+# 失败记录缓存（document_id -> 失败信息）
+failed_records = {}
+
 # 通用请求头（用于轮询模式检查任务状态）
 HEADERS = {
     "Accept": "application/json, text/plain, */*",
@@ -118,6 +138,73 @@ HEADERS = {
     "x-fly-tenantid": "00000000-0000-0000-0000-000000000000",
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 }
+
+
+def load_failed_records():
+    """加载失败记录"""
+    global failed_records
+    if not ENABLE_FAILED_RECORD:
+        return
+    
+    if os.path.exists(FAILED_RECORD_FILE):
+        try:
+            with open(FAILED_RECORD_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                failed_records = data.get('failed_docs', {})
+                print(f"\n{'='*60}")
+                print(f"已加载 {len(failed_records)} 条失败记录")
+                if failed_records:
+                    updated_at = data.get('updated_at', '未知')
+                    print(f"最后更新: {updated_at}")
+                    print(f"失败记录文件: {FAILED_RECORD_FILE}")
+                    if SKIP_RECORDED_FAILED:
+                        print(f"⚠️  这些文档将被跳过，不会重新处理")
+                    print(f"{'='*60}\n")
+        except Exception as e:
+            print(f"加载失败记录出错: {e}")
+            failed_records = {}
+    else:
+        print("未找到失败记录文件，将创建新的记录")
+        failed_records = {}
+
+
+def save_failed_records():
+    """保存失败记录"""
+    if not ENABLE_FAILED_RECORD:
+        return
+    
+    try:
+        os.makedirs(os.path.dirname(FAILED_RECORD_FILE), exist_ok=True)
+        with open(FAILED_RECORD_FILE, 'w', encoding='utf-8') as f:
+            json.dump({
+                'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'total_failed': len(failed_records),
+                'failed_docs': failed_records
+            }, f, ensure_ascii=False, indent=2)
+        print(f"\n{'='*60}")
+        print(f"✓ 已保存 {len(failed_records)} 条失败记录")
+        print(f"文件位置: {FAILED_RECORD_FILE}")
+        print(f"下次启动时将自动跳过这些失败的文档")
+        print(f"{'='*60}\n")
+    except Exception as e:
+        print(f"保存失败记录出错: {e}")
+
+
+def is_in_failed_records(document_id):
+    """检查文档是否在失败记录中"""
+    return document_id in failed_records
+
+
+def add_failed_record(doc_id, doc_name, doc_path, doc_type, error_msg):
+    """添加失败记录"""
+    global failed_records
+    failed_records[doc_id] = {
+        'name': doc_name,
+        'path': doc_path,
+        'type': doc_type,
+        'error': error_msg,
+        'failed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
 
 
 def get_folder_path(folder_id):
@@ -258,6 +345,26 @@ def print_config():
     
     print(f"  重试状态: {', '.join(RETRY_STATUS)}")
     print(f"  路径长度限制: {MAX_PATH_LENGTH} 字符（超长跳过）")
+    
+    # 失败记录配置
+    print(f"  失败记录: {'启用' if ENABLE_FAILED_RECORD else '关闭'}")
+    if ENABLE_FAILED_RECORD:
+        print(f"    - 跳过已失败: {'是' if SKIP_RECORDED_FAILED else '否'}")
+        print(f"    - 只处理失败记录: {'是' if PROCESS_ONLY_FAILED_RECORD else '否'}")
+        if len(failed_records) > 0:
+            print(f"    - 已记录失败数: {len(failed_records)}")
+            # 统计失败原因
+            error_types = {}
+            for doc_id, info in failed_records.items():
+                error = info.get('error', '未知错误')
+                error_types[error] = error_types.get(error, 0) + 1
+            if len(error_types) > 0:
+                print(f"    - 失败原因分布:")
+                for error, count in sorted(error_types.items(), key=lambda x: x[1], reverse=True)[:5]:
+                    print(f"      · {error}: {count} 个")
+                if len(error_types) > 5:
+                    print(f"      · ... 还有 {len(error_types) - 5} 种其他错误")
+    
     print("="*60)
 
 
@@ -337,17 +444,12 @@ def collect_all_docs():
                     continue
                 
                 found_count = 0
+                skipped_count = 0
                 for doc in documents:
-                    doc_status, _ = get_doc_status(doc)
-                    
-                    if doc_status not in RETRY_STATUS:
-                        continue
-                    
+                    document_id = doc.get("id")
                     doc_name = doc.get("name", "")
                     doc_type = doc.get("type", "")
-                    
-                    if not should_process_file(doc_type):
-                        continue
+                    doc_status, _ = get_doc_status(doc)
                     
                     # 构建路径
                     if folder_path and folder_path != "根目录":
@@ -355,9 +457,27 @@ def collect_all_docs():
                     else:
                         full_path = f"{dataset_name}/{doc_name}"
                     
-                    # 超长路径直接跳过，不加入待处理列表
-                    if len(full_path) > MAX_PATH_LENGTH:
-                        continue
+                    # 如果只处理失败记录模式
+                    if PROCESS_ONLY_FAILED_RECORD:
+                        # 只处理在失败记录中的文档
+                        if not is_in_failed_records(document_id):
+                            continue
+                    else:
+                        # 正常模式：检查是否应该跳过
+                        if doc_status not in RETRY_STATUS:
+                            continue
+                        
+                        if not should_process_file(doc_type):
+                            continue
+                        
+                        # 超长路径跳过
+                        if len(full_path) > MAX_PATH_LENGTH:
+                            continue
+                        
+                        # 如果启用了跳过失败记录，且文档在失败记录中，则跳过
+                        if SKIP_RECORDED_FAILED and is_in_failed_records(document_id):
+                            skipped_count += 1
+                            continue
                     
                     all_docs.append({
                         'dataset_id': dataset_id,
@@ -370,9 +490,15 @@ def collect_all_docs():
                     found_count += 1
                 
                 if found_count > 0:
-                    print(f"- 发现 {found_count} 个")
+                    if skipped_count > 0:
+                        print(f"- 发现 {found_count} 个（跳过已失败 {skipped_count} 个）")
+                    else:
+                        print(f"- 发现 {found_count} 个")
                 else:
-                    print("- 无需处理")
+                    if skipped_count > 0:
+                        print(f"- 无需处理（跳过已失败 {skipped_count} 个）")
+                    else:
+                        print("- 无需处理")
                     
             except Exception as e:
                 print(f"- 出错: {e}")
@@ -478,17 +604,12 @@ def run_batch_mode():
                     continue
                 
                 found_count = 0
+                skipped_count = 0
                 for doc in documents:
-                    doc_status, _ = get_doc_status(doc)
-                    
-                    if doc_status not in RETRY_STATUS:
-                        continue
-                    
+                    document_id = doc.get("id")
                     doc_name = doc.get("name", "")
                     doc_type = doc.get("type", "")
-                    
-                    if not should_process_file(doc_type):
-                        continue
+                    doc_status, _ = get_doc_status(doc)
                     
                     # 构建路径
                     if folder_path and folder_path != "根目录":
@@ -496,9 +617,27 @@ def run_batch_mode():
                     else:
                         full_path = f"{dataset_name}/{doc_name}"
                     
-                    # 超长路径直接跳过，不启动任务
-                    if len(full_path) > MAX_PATH_LENGTH:
-                        continue
+                    # 如果只处理失败记录模式
+                    if PROCESS_ONLY_FAILED_RECORD:
+                        # 只处理在失败记录中的文档
+                        if not is_in_failed_records(document_id):
+                            continue
+                    else:
+                        # 正常模式：检查是否应该跳过
+                        if doc_status not in RETRY_STATUS:
+                            continue
+                        
+                        if not should_process_file(doc_type):
+                            continue
+                        
+                        # 超长路径跳过
+                        if len(full_path) > MAX_PATH_LENGTH:
+                            continue
+                        
+                        # 如果启用了跳过失败记录，且文档在失败记录中，则跳过
+                        if SKIP_RECORDED_FAILED and is_in_failed_records(document_id):
+                            skipped_count += 1
+                            continue
                     
                     found_count += 1
                     total_started += 1
@@ -510,7 +649,7 @@ def run_batch_mode():
                     # 启动任务
                     success, result = start_task({
                         'dataset_id': dataset_id,
-                        'document_id': doc.get("id"),
+                        'document_id': document_id,
                     }, ws_id)
                     
                     if success:
@@ -524,12 +663,16 @@ def run_batch_mode():
                     else:
                         print(f"    ✗ 失败: {result}")
                         total_fail += 1
+                        error_msg = str(result)
                         failed_docs.append({
                             'name': doc_name,
                             'path': full_path,
                             'type': doc_type,
-                            'error': str(result),
+                            'error': error_msg,
                         })
+                        # 记录失败
+                        if ENABLE_FAILED_RECORD:
+                            add_failed_record(document_id, doc_name, full_path, doc_type, error_msg)
                     
                     # 请求间隔
                     time.sleep(REQUEST_INTERVAL)
@@ -545,9 +688,15 @@ def run_batch_mode():
                         batch_count = 0
                 
                 if found_count > 0:
-                    print(f"\n  知识库 [{dataset_name}] 处理了 {found_count} 个文档")
+                    if skipped_count > 0:
+                        print(f"\n  知识库 [{dataset_name}] 处理了 {found_count} 个文档（跳过已失败 {skipped_count} 个）")
+                    else:
+                        print(f"\n  知识库 [{dataset_name}] 处理了 {found_count} 个文档")
                 else:
-                    print(f"  无需处理")
+                    if skipped_count > 0:
+                        print(f"  无需处理（跳过已失败 {skipped_count} 个）")
+                    else:
+                        print(f"  无需处理")
                     
             except Exception as e:
                 print(f"  出错: {e}")
@@ -689,17 +838,12 @@ def run_polling_mode():
                 
                 # 收集该知识库中需要处理的文档
                 docs_in_dataset = []
+                skipped_count = 0
                 for doc in documents:
-                    doc_status, _ = get_doc_status(doc)
-                    
-                    if doc_status not in RETRY_STATUS:
-                        continue
-                    
+                    document_id = doc.get("id")
                     doc_name = doc.get("name", "")
                     doc_type = doc.get("type", "")
-                    
-                    if not should_process_file(doc_type):
-                        continue
+                    doc_status, _ = get_doc_status(doc)
                     
                     # 构建路径
                     if folder_path and folder_path != "根目录":
@@ -707,9 +851,27 @@ def run_polling_mode():
                     else:
                         full_path = f"{dataset_name}/{doc_name}"
                     
-                    # 超长路径直接跳过
-                    if len(full_path) > MAX_PATH_LENGTH:
-                        continue
+                    # 如果只处理失败记录模式
+                    if PROCESS_ONLY_FAILED_RECORD:
+                        # 只处理在失败记录中的文档
+                        if not is_in_failed_records(document_id):
+                            continue
+                    else:
+                        # 正常模式：检查是否应该跳过
+                        if doc_status not in RETRY_STATUS:
+                            continue
+                        
+                        if not should_process_file(doc_type):
+                            continue
+                        
+                        # 超长路径跳过
+                        if len(full_path) > MAX_PATH_LENGTH:
+                            continue
+                        
+                        # 如果启用了跳过失败记录，且文档在失败记录中，则跳过
+                        if SKIP_RECORDED_FAILED and is_in_failed_records(document_id):
+                            skipped_count += 1
+                            continue
                     
                     docs_in_dataset.append({
                         'dataset_id': dataset_id,
@@ -721,10 +883,16 @@ def run_polling_mode():
                     })
                 
                 if not docs_in_dataset:
-                    print("  无需处理的文档")
+                    if skipped_count > 0:
+                        print(f"  无需处理的文档（跳过已失败 {skipped_count} 个）")
+                    else:
+                        print("  无需处理的文档")
                     continue
                 
-                print(f"  发现 {len(docs_in_dataset)} 个待处理文档")
+                if skipped_count > 0:
+                    print(f"  发现 {len(docs_in_dataset)} 个待处理文档（跳过已失败 {skipped_count} 个）")
+                else:
+                    print(f"  发现 {len(docs_in_dataset)} 个待处理文档")
                 
                 # 逐个启动该知识库的文档，并维护滑动窗口
                 for doc in docs_in_dataset:
@@ -772,24 +940,32 @@ def run_polling_mode():
                                 })
                             else:
                                 total_fail += 1
+                                error_msg = '任务执行失败'
                                 failed_docs.append({
                                     'name': task_doc['name'],
                                     'path': task_doc['path'],
                                     'type': task_doc['type'],
-                                    'error': '任务执行失败',
+                                    'error': error_msg,
                                 })
+                                # 记录失败
+                                if ENABLE_FAILED_RECORD:
+                                    add_failed_record(doc_id, task_doc['name'], task_doc['path'], task_doc['type'], error_msg)
                         
                         # 处理超时的任务
                         for doc_id in timeout_ids:
                             task_doc = running_tasks[doc_id]['doc']
                             del running_tasks[doc_id]
                             total_fail += 1
+                            error_msg = f'超时({MAX_WAIT_TIME}秒)'
                             failed_docs.append({
                                 'name': task_doc['name'],
                                 'path': task_doc['path'],
                                 'type': task_doc['type'],
-                                'error': f'超时({MAX_WAIT_TIME}秒)',
+                                'error': error_msg,
                             })
+                            # 记录失败
+                            if ENABLE_FAILED_RECORD:
+                                add_failed_record(doc_id, task_doc['name'], task_doc['path'], task_doc['type'], error_msg)
                         
                         # 如果没有任何任务完成或超时，等待一段时间
                         if not completed_ids and not timeout_ids:
@@ -813,12 +989,16 @@ def run_polling_mode():
                     else:
                         print(f"    ✗ 启动失败: {result}")
                         total_fail += 1
+                        error_msg = str(result)
                         failed_docs.append({
                             'name': doc['name'],
                             'path': doc['path'],
                             'type': doc['type'],
-                            'error': str(result),
+                            'error': error_msg,
                         })
+                        # 记录失败
+                        if ENABLE_FAILED_RECORD:
+                            add_failed_record(document_id, doc['name'], doc['path'], doc['type'], error_msg)
                     
                     time.sleep(REQUEST_INTERVAL)
                 
@@ -873,24 +1053,32 @@ def run_polling_mode():
                 })
             else:
                 total_fail += 1
+                error_msg = '任务执行失败'
                 failed_docs.append({
                     'name': doc['name'],
                     'path': doc['path'],
                     'type': doc['type'],
-                    'error': '任务执行失败',
+                    'error': error_msg,
                 })
+                # 记录失败
+                if ENABLE_FAILED_RECORD:
+                    add_failed_record(doc_id, doc['name'], doc['path'], doc['type'], error_msg)
         
         # 处理超时的任务
         for doc_id in timeout_ids:
             doc = running_tasks[doc_id]['doc']
             del running_tasks[doc_id]
             total_fail += 1
+            error_msg = f'超时({MAX_WAIT_TIME}秒)'
             failed_docs.append({
                 'name': doc['name'],
                 'path': doc['path'],
                 'type': doc['type'],
-                'error': f'超时({MAX_WAIT_TIME}秒)',
+                'error': error_msg,
             })
+            # 记录失败
+            if ENABLE_FAILED_RECORD:
+                add_failed_record(doc_id, doc['name'], doc['path'], doc['type'], error_msg)
         
         # 显示状态
         if running_tasks:
@@ -931,10 +1119,26 @@ def run_polling_mode():
 
 
 def main():
-    if RUN_MODE == 'polling':
-        run_polling_mode()
-    else:
-        run_batch_mode()
+    # 加载失败记录
+    load_failed_records()
+    
+    # 记录启动时的失败数量
+    initial_failed_count = len(failed_records)
+    
+    try:
+        if RUN_MODE == 'polling':
+            run_polling_mode()
+        else:
+            run_batch_mode()
+    finally:
+        # 计算新增失败记录
+        new_failed_count = len(failed_records) - initial_failed_count
+        
+        # 保存失败记录
+        if new_failed_count > 0:
+            print(f"\n⚠️  本次运行新增 {new_failed_count} 条失败记录")
+        
+        save_failed_records()
 
 
 if __name__ == "__main__":

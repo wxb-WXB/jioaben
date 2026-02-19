@@ -28,7 +28,7 @@ for _dir in [LOGS_DIR, DATA_DIR, FAILED_RECORDS_DIR, SUCCESS_RECORDS_DIR]:
 # =============================================================================
 API_HOST = "https://ai.yxgswater.com:18080"
 API_KEY = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzEyOTMxMTN9.MyM9B2b2jZtzjDfdnkF-QGFhGFumIgQHW0_aM1_V7Bc"
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzE4MDY5MDF9.ybwpX1HlPAGPrncIEKG_OVVghfZEdXpcZFp1P_rTrJs"
 
 # =============================================================================
 # 工作空间配置
@@ -166,7 +166,7 @@ LOCAL_SCAN = {
 # 如果设置了此值，会优先处理这些文件夹下的知识库，然后再处理其他文件夹
 PRIORITY_FOLDER_IDS = [
     # "10aab4f5-3191-4e12-a11c-2f3c4efb8204",  # 09正式稿设计图纸汇总至20260114--已完成
-    "10aab4f5-3191-4e12-a11c-2f3c4efb8204",
+    # "10aab4f5-3191-4e12-a11c-2f3c4efb8204",
     
     
 
