@@ -29,7 +29,8 @@ sys.path.insert(0, project_root)
 # 导入核心模块
 from src.core import LingyanDataset
 from src.core.models import FolderMap
-from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACE_NAME, LLM_CONFIG, PRIORITY_FOLDER_IDS, ONLY_PRIORITY_FOLDER
+from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACE_NAME, LLM_CONFIG, PRIORITY_FOLDER_IDS, ONLY_PRIORITY_FOLDER, FAILED_RECORDS_DIR
+import json
 
 # ============== 配置区域 ==============
 # 处理配置
@@ -37,6 +38,11 @@ REQUEST_INTERVAL = 3  # 每个请求成功后等待的时间（秒）
 MAX_RETRIES = 1       # 单个文档最大重试次数
 RETRY_INTERVAL = 2    # 重试间隔（秒）
 SEGMENT_CHECK_INTERVAL = 0.5  # 每次检查分段之间的间隔（秒）
+
+# 失败记录配置
+ENABLE_FAILED_RECORD = True          # 是否启用失败记录功能
+SKIP_RECORDED_FAILED = True          # 是否跳过已记录的失败文档
+FAILED_RECORD_FILE = os.path.join(FAILED_RECORDS_DIR, "doc_summary_failed.json")  # 失败记录文件路径
 
 # 优先处理的文件夹ID配置已移至 src/config.py
 # 可通过修改 config.py 中的 PRIORITY_FOLDER_IDS 和 ONLY_PRIORITY_FOLDER 来调整优先级
@@ -51,6 +57,74 @@ logging.basicConfig(
 log = logging.getLogger(__name__)
 
 dataset_api = LingyanDataset(API_KEY)
+
+# 失败记录缓存（document_id -> 失败信息）
+failed_records = {}
+
+
+def load_failed_records():
+    """加载失败记录"""
+    global failed_records
+    if not ENABLE_FAILED_RECORD:
+        return
+    
+    if os.path.exists(FAILED_RECORD_FILE):
+        try:
+            with open(FAILED_RECORD_FILE, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                failed_records = data.get('failed_docs', {})
+                log.info("=" * 60)
+                log.info(f"已加载 {len(failed_records)} 条失败记录")
+                if failed_records:
+                    updated_at = data.get('updated_at', '未知')
+                    log.info(f"最后更新: {updated_at}")
+                    log.info(f"失败记录文件: {FAILED_RECORD_FILE}")
+                    if SKIP_RECORDED_FAILED:
+                        log.info(f"⚠️  这些文档将被跳过，不会重新处理")
+                log.info("=" * 60)
+        except Exception as e:
+            log.error(f"加载失败记录出错: {e}")
+            failed_records = {}
+    else:
+        log.info("未找到失败记录文件，将创建新的记录")
+        failed_records = {}
+
+
+def save_failed_records():
+    """保存失败记录（立即保存）"""
+    if not ENABLE_FAILED_RECORD:
+        return
+    
+    try:
+        os.makedirs(os.path.dirname(FAILED_RECORD_FILE), exist_ok=True)
+        with open(FAILED_RECORD_FILE, 'w', encoding='utf-8') as f:
+            json.dump({
+                'updated_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+                'total_failed': len(failed_records),
+                'failed_docs': failed_records
+            }, f, ensure_ascii=False, indent=2)
+        log.info(f"✓ 失败记录已保存: {len(failed_records)} 条")
+    except Exception as e:
+        log.error(f"保存失败记录出错: {e}")
+
+
+def is_in_failed_records(document_id):
+    """检查文档是否在失败记录中"""
+    return document_id in failed_records
+
+
+def add_failed_record(doc_id, doc_name, doc_path, error_msg):
+    """添加失败记录并立即保存"""
+    global failed_records
+    failed_records[doc_id] = {
+        'name': doc_name,
+        'path': doc_path,
+        'error': error_msg,
+        'failed_at': datetime.now().strftime('%Y-%m-%d %H:%M:%S'),
+    }
+    # 立即保存，确保即使脚本中断也能记录
+    save_failed_records()
+
 
 
 def get_folder_path(folder_id):
@@ -339,18 +413,33 @@ def scan_and_generate(workspace_id, workspace_name):
             
             docs_to_process = []
             ds_skip = 0
+            ds_failed_skip = 0
             
             for doc in documents:
+                document_id = doc.get("id")
                 vector_success = is_vector_success(doc)
                 has_summary = check_doc_has_summary(doc)
                 
+                # 如果在失败记录中，跳过
+                if SKIP_RECORDED_FAILED and is_in_failed_records(document_id):
+                    ds_failed_skip += 1
+                    continue
+                
                 if vector_success and not has_summary:
+                    doc_name = doc.get("name")
+                    # 构建完整路径
+                    if folder_path and folder_path != "根目录":
+                        full_path = f"{folder_path}/{dataset_name}/{doc_name}"
+                    else:
+                        full_path = f"{dataset_name}/{doc_name}"
+                    
                     docs_to_process.append({
                         "dataset_id": dataset_id,
                         "dataset_name": dataset_name,
-                        "document_id": doc.get("id"),
-                        "document_name": doc.get("name"),
-                        "folder_path": folder_path
+                        "document_id": document_id,
+                        "document_name": doc_name,
+                        "folder_path": folder_path,
+                        "full_path": full_path
                     })
                 elif vector_success and has_summary:
                     ds_skip += 1
@@ -358,13 +447,19 @@ def scan_and_generate(workspace_id, workspace_name):
             total_skip += ds_skip
             
             if len(docs_to_process) == 0:
-                if ds_skip > 0:
-                    log.info(f"  向量化成功: {ds_skip} 个(已有摘要), 无需处理")
+                if ds_skip > 0 or ds_failed_skip > 0:
+                    skip_msg = f"  向量化成功: {ds_skip} 个(已有摘要)"
+                    if ds_failed_skip > 0:
+                        skip_msg += f", {ds_failed_skip} 个(已记录失败)"
+                    log.info(skip_msg + ", 无需处理")
                 else:
                     log.info(f"  无向量化成功的文档")
                 continue
             
-            log.info(f"  发现 {len(docs_to_process)} 个需要生成摘要, {ds_skip} 个已有摘要")
+            info_msg = f"  发现 {len(docs_to_process)} 个需要生成摘要, {ds_skip} 个已有摘要"
+            if ds_failed_skip > 0:
+                info_msg += f", {ds_failed_skip} 个已记录失败"
+            log.info(info_msg)
             log.info("-" * 50)
             
             for idx, doc_info in enumerate(docs_to_process, 1):
@@ -378,10 +473,20 @@ def scan_and_generate(workspace_id, workspace_name):
                 )
                 time.sleep(SEGMENT_CHECK_INTERVAL)
                 if segment_count == 0:
-                    log.warning(f"    [跳过] 文档没有任何分段，无法生成摘要")
+                    error_msg = "文档没有任何分段"
+                    log.warning(f"    [跳过] {error_msg}")
                     total_skip += 1
+                    # 记录失败
+                    if ENABLE_FAILED_RECORD:
+                        add_failed_record(
+                            doc_info['document_id'],
+                            doc_info['document_name'],
+                            doc_info['full_path'],
+                            error_msg
+                        )
                     continue
                 
+                final_success = False
                 for attempt in range(1, MAX_RETRIES + 1):
                     success, message, should_skip = generate_and_save_summary(
                         doc_info['dataset_id'],
@@ -392,10 +497,19 @@ def scan_and_generate(workspace_id, workspace_name):
                     if success:
                         log.info(f"    [成功] {message}")
                         total_success += 1
+                        final_success = True
                         break
                     elif should_skip:
                         log.warning(f"    [跳过] 文档过大或超过模型上下文限制: {message}")
                         total_skip += 1
+                        # 记录失败
+                        if ENABLE_FAILED_RECORD:
+                            add_failed_record(
+                                doc_info['document_id'],
+                                doc_info['document_name'],
+                                doc_info['full_path'],
+                                f"超过限制: {message}"
+                            )
                         break
                     else:
                         log.warning(f"    [失败] 第{attempt}次尝试: {message}")
@@ -405,8 +519,16 @@ def scan_and_generate(workspace_id, workspace_name):
                         else:
                             log.error(f"    [最终失败] 已达最大重试次数({MAX_RETRIES})")
                             total_fail += 1
+                            # 记录失败
+                            if ENABLE_FAILED_RECORD:
+                                add_failed_record(
+                                    doc_info['document_id'],
+                                    doc_info['document_name'],
+                                    doc_info['full_path'],
+                                    message
+                                )
                 
-                if idx < len(docs_to_process):
+                if final_success and idx < len(docs_to_process):
                     time.sleep(REQUEST_INTERVAL)
             
             log.info("-" * 50)
@@ -423,11 +545,21 @@ def main():
     import urllib3
     urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     
+    # 加载失败记录
+    load_failed_records()
+    
+    # 记录启动时的失败数量
+    initial_failed_count = len(failed_records)
+    
     log.info("=" * 60)
     log.info("文档摘要生成工具")
     log.info(f"模式: 逐个处理（成功一个再下一个）")
     log.info(f"每个成功后间隔: {REQUEST_INTERVAL} 秒")
     log.info(f"失败重试次数: {MAX_RETRIES}, 重试间隔: {RETRY_INTERVAL} 秒")
+    log.info(f"失败记录: {'启用' if ENABLE_FAILED_RECORD else '关闭'}")
+    if ENABLE_FAILED_RECORD:
+        log.info(f"  - 跳过已失败: {'是' if SKIP_RECORDED_FAILED else '否'}")
+        log.info(f"  - 失败立即保存: 是")
     
     if PRIORITY_FOLDER_IDS:
         log.info(f"优先文件夹数量: {len(PRIORITY_FOLDER_IDS)}")
@@ -440,17 +572,37 @@ def main():
     
     start_time = datetime.now()
     
-    success, fail, skip = scan_and_generate(WORKSPACE_ID, WORKSPACE_NAME)
+    try:
+        success, fail, skip = scan_and_generate(WORKSPACE_ID, WORKSPACE_NAME)
+    except KeyboardInterrupt:
+        log.warning("\n检测到中断信号，正在保存失败记录...")
+        save_failed_records()
+        log.info("失败记录已保存，程序退出")
+        return
+    except Exception as e:
+        log.error(f"程序异常: {e}")
+        save_failed_records()
+        raise
     
     end_time = datetime.now()
     duration = end_time - start_time
+    
+    # 计算新增失败记录
+    new_failed_count = len(failed_records) - initial_failed_count
     
     log.info("")
     log.info("=" * 60)
     log.info("全部完成！")
     log.info(f"成功: {success}, 失败: {fail}, 跳过(已有摘要): {skip}")
+    if new_failed_count > 0:
+        log.info(f"⚠️  本次运行新增 {new_failed_count} 条失败记录")
     log.info(f"总耗时: {duration}")
     log.info("=" * 60)
+    
+    # 最终保存
+    if new_failed_count > 0:
+        log.info(f"\n失败记录文件: {FAILED_RECORD_FILE}")
+        log.info(f"下次启动时将自动跳过这些失败的文档")
 
 
 if __name__ == "__main__":
