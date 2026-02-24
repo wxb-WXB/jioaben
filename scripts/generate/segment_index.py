@@ -29,7 +29,12 @@ sys.path.insert(0, project_root)
 # 导入核心模块
 from src.core import LingyanDataset
 from src.core.models import FolderMap
-from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACE_NAME, LLM_CONFIG, PRIORITY_FOLDER_IDS, ONLY_PRIORITY_FOLDER, FAILED_RECORDS_DIR
+from src.config import (
+    API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACE_NAME, LLM_CONFIG,
+    PRIORITY_FOLDER_IDS, ONLY_PRIORITY_FOLDER,
+    TARGET_FOLDER_PATH, ONLY_TARGET_FOLDER,
+    FAILED_RECORDS_DIR,
+)
 import json
 
 # ============== 配置区域 ==============
@@ -425,11 +430,26 @@ def scan_and_generate(workspace_id, workspace_name):
     """扫描知识库，为向量化成功的文档生成分段索引"""
     log.info(f"正在扫描 [{workspace_name}] 的知识库...")
     
-    # 如果指定了优先文件夹，先处理优先文件夹
     datasets_to_process = []
     other_datasets = []
     
-    if PRIORITY_FOLDER_IDS:
+    if ONLY_TARGET_FOLDER and TARGET_FOLDER_PATH:
+        # 仅处理 TARGET_FOLDER_PATH 下的文件
+        log.info(f"仅处理目标路径: {TARGET_FOLDER_PATH}")
+        try:
+            status, all_datasets = dataset_api.list_datasets(workspace_id)
+            if status == 200:
+                for ds in all_datasets:
+                    folder_id = ds.get("folder_id")
+                    folder_path = get_folder_path(folder_id)
+                    if TARGET_FOLDER_PATH in folder_path:
+                        other_datasets.append(ds)
+                log.info(f"找到 {len(other_datasets)} 个知识库（路径包含 {TARGET_FOLDER_PATH}）")
+            else:
+                log.error(f"获取知识库列表失败: {all_datasets}")
+        except Exception as e:
+            log.error(f"获取知识库列表失败: {e}")
+    elif PRIORITY_FOLDER_IDS:
         log.info(f"优先处理 {len(PRIORITY_FOLDER_IDS)} 个文件夹:")
         
         for folder_id in PRIORITY_FOLDER_IDS:
@@ -446,8 +466,8 @@ def scan_and_generate(workspace_id, workspace_name):
             except Exception as e:
                 log.error(f"    获取知识库失败: {e}")
     
-    # 如果需要处理其他文件夹
-    if not ONLY_PRIORITY_FOLDER:
+    # 如果需要处理其他文件夹（非 ONLY_TARGET_FOLDER 模式时）
+    if not ONLY_TARGET_FOLDER and not ONLY_PRIORITY_FOLDER:
         try:
             status, all_datasets = dataset_api.list_datasets(workspace_id)
             if status == 200:
@@ -541,12 +561,21 @@ def main():
         log.info(f"  - 跳过已失败: {'是' if SKIP_RECORDED_FAILED else '否'}")
         log.info(f"  - 失败立即保存: 是")
     
-    if PRIORITY_FOLDER_IDS:
+    if ONLY_TARGET_FOLDER and TARGET_FOLDER_PATH:
+        log.info(f"仅处理目标路径: {TARGET_FOLDER_PATH}")
+    elif PRIORITY_FOLDER_IDS:
         log.info(f"优先文件夹数量: {len(PRIORITY_FOLDER_IDS)}")
         for folder_id in PRIORITY_FOLDER_IDS:
             priority_folder_path = get_folder_path(folder_id)
             log.info(f"  - {priority_folder_path} (ID: {folder_id})")
         log.info(f"只处理优先文件夹: {'是' if ONLY_PRIORITY_FOLDER else '否'}")
+        if TARGET_FOLDER_PATH:
+            log.info(f"路径过滤: {TARGET_FOLDER_PATH}")
+    else:
+        if TARGET_FOLDER_PATH:
+            log.info(f"目标文件夹路径: {TARGET_FOLDER_PATH}")
+        else:
+            log.info(f"目标文件夹路径: 全部")
     
     log.info("=" * 60)
     
