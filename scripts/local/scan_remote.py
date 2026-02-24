@@ -135,14 +135,12 @@ def get_folder_path(folder_id):
 
 
 def get_doc_size(doc):
-    """获取文档大小（字节）"""
-    size = doc.get("file_size")
-    if size is not None and size > 0:
-        return size
+    """获取文档大小（字节），同时取 file_size 和 size 中的较大值"""
+    file_size = doc.get("file_size")
     size = doc.get("size")
-    if size is not None and size > 0:
-        return size
-    return 0
+    file_size = file_size if isinstance(file_size, (int, float)) and file_size > 0 else 0
+    size = size if isinstance(size, (int, float)) and size > 0 else 0
+    return max(file_size, size)
 
 
 def format_size(size_bytes):
@@ -239,7 +237,7 @@ for i, ds in enumerate(datasets):
             elif doc_status == "no_task":
                 status_label = "无任务"
             else:
-                status_label = doc_status
+                status_label = "无任务"
             
             # 更新知识库统计
             dataset_record["total_size"] += doc_size

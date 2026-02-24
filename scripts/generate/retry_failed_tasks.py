@@ -36,7 +36,12 @@ sys.path.insert(0, project_root)
 # 导入核心模块
 from src.core import LingyanDataset
 from src.core.models import FolderMap
-from src.config import API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACES, PRIORITY_FOLDER_IDS, ONLY_PRIORITY_FOLDER, FAILED_RECORDS_DIR
+from src.config import (
+    API_KEY, AUTH_TOKEN, WORKSPACE_ID, WORKSPACES,
+    PRIORITY_FOLDER_IDS, ONLY_PRIORITY_FOLDER,
+    TARGET_FOLDER_PATH, ONLY_TARGET_FOLDER,
+    FAILED_RECORDS_DIR,
+)
 import json
 from datetime import datetime
 
@@ -49,8 +54,7 @@ from datetime import datetime
 # 只使用环北知识库
 workspace_ids = [("9c6857a6-f87b-4db8-8978-2f2e117f05a0", "环北知识库")]
 
-# 只处理指定目录下的知识库（为空则处理所有目录）
-TARGET_FOLDER_PATH = ""  # 空值=处理所有目录
+# 只处理指定目录下的知识库，从 config.py 读取 TARGET_FOLDER_PATH、ONLY_TARGET_FOLDER
 
 # 优先处理的文件夹ID配置已移至 src/config.py
 # 可通过修改 config.py 中的 PRIORITY_FOLDER_IDS 和 ONLY_PRIORITY_FOLDER 来调整优先级
@@ -323,12 +327,16 @@ def print_config():
         print(f"  轮询间隔: {POLL_INTERVAL} 秒")
         print(f"  最大等待: {MAX_WAIT_TIME} 秒")
     
-    if PRIORITY_FOLDER_IDS:
+    if ONLY_TARGET_FOLDER and TARGET_FOLDER_PATH:
+        print(f"  仅处理目标路径: {TARGET_FOLDER_PATH}")
+    elif PRIORITY_FOLDER_IDS:
         print(f"  优先文件夹数量: {len(PRIORITY_FOLDER_IDS)}")
         for folder_id in PRIORITY_FOLDER_IDS:
             priority_folder_path = get_folder_path(folder_id)
             print(f"    - {priority_folder_path} (ID: {folder_id})")
         print(f"  只处理优先文件夹: {'是' if ONLY_PRIORITY_FOLDER else '否'}")
+        if TARGET_FOLDER_PATH:
+            print(f"  路径过滤: {TARGET_FOLDER_PATH}")
     else:
         if TARGET_FOLDER_PATH:
             print(f"  目标文件夹路径: {TARGET_FOLDER_PATH}")
@@ -375,11 +383,24 @@ def collect_all_docs():
     for ws_id, ws_name in workspace_ids:
         print(f"\n正在扫描 [{ws_name}] 的知识库...")
         
-        # 如果指定了优先文件夹，先处理优先文件夹
         datasets_to_process = []
         other_datasets = []
         
-        if PRIORITY_FOLDER_IDS:
+        if ONLY_TARGET_FOLDER and TARGET_FOLDER_PATH:
+            # 仅处理 TARGET_FOLDER_PATH 下的文件
+            print(f"仅处理目标路径: {TARGET_FOLDER_PATH}")
+            try:
+                status, all_datasets = dataset_api.list_datasets(ws_id)
+                if status == 200:
+                    for ds in all_datasets:
+                        folder_id = ds.get("folder_id")
+                        folder_path = get_folder_path(folder_id)
+                        if TARGET_FOLDER_PATH in folder_path:
+                            other_datasets.append(ds)
+                    print(f"找到 {len(other_datasets)} 个知识库（路径包含 {TARGET_FOLDER_PATH}）")
+            except Exception as e:
+                print(f"获取知识库列表失败: {e}")
+        elif PRIORITY_FOLDER_IDS:
             print(f"优先处理 {len(PRIORITY_FOLDER_IDS)} 个文件夹:")
             
             for folder_id in PRIORITY_FOLDER_IDS:
@@ -394,8 +415,8 @@ def collect_all_docs():
                 except Exception as e:
                     print(f"    获取知识库失败: {e}")
         
-        # 如果需要处理其他文件夹
-        if not ONLY_PRIORITY_FOLDER:
+        # 如果需要处理其他文件夹（非 ONLY_TARGET_FOLDER 模式时）
+        if not ONLY_TARGET_FOLDER and not ONLY_PRIORITY_FOLDER:
             try:
                 status, all_datasets = dataset_api.list_datasets(ws_id)
                 if status == 200:
@@ -535,11 +556,24 @@ def run_batch_mode():
     for ws_id, ws_name in workspace_ids:
         print(f"\n正在扫描 [{ws_name}] 的知识库...")
         
-        # 如果指定了优先文件夹，先处理优先文件夹
         datasets_to_process = []
         other_datasets = []
         
-        if PRIORITY_FOLDER_IDS:
+        if ONLY_TARGET_FOLDER and TARGET_FOLDER_PATH:
+            # 仅处理 TARGET_FOLDER_PATH 下的文件
+            print(f"仅处理目标路径: {TARGET_FOLDER_PATH}")
+            try:
+                status, all_datasets = dataset_api.list_datasets(ws_id)
+                if status == 200:
+                    for ds in all_datasets:
+                        folder_id = ds.get("folder_id")
+                        folder_path = get_folder_path(folder_id)
+                        if TARGET_FOLDER_PATH in folder_path:
+                            other_datasets.append(ds)
+                    print(f"找到 {len(other_datasets)} 个知识库（路径包含 {TARGET_FOLDER_PATH}）")
+            except Exception as e:
+                print(f"获取知识库列表失败: {e}")
+        elif PRIORITY_FOLDER_IDS:
             print(f"优先处理 {len(PRIORITY_FOLDER_IDS)} 个文件夹:")
             
             for folder_id in PRIORITY_FOLDER_IDS:
@@ -554,8 +588,8 @@ def run_batch_mode():
                 except Exception as e:
                     print(f"    获取知识库失败: {e}")
         
-        # 如果需要处理其他文件夹
-        if not ONLY_PRIORITY_FOLDER:
+        # 如果需要处理其他文件夹（非 ONLY_TARGET_FOLDER 模式时）
+        if not ONLY_TARGET_FOLDER and not ONLY_PRIORITY_FOLDER:
             try:
                 status, all_datasets = dataset_api.list_datasets(ws_id)
                 if status == 200:
@@ -766,11 +800,24 @@ def run_polling_mode():
     for ws_id, ws_name in workspace_ids:
         print(f"\n正在扫描 [{ws_name}] 的知识库...")
         
-        # 如果指定了优先文件夹，先处理优先文件夹
         datasets_to_process = []
         other_datasets = []
         
-        if PRIORITY_FOLDER_IDS:
+        if ONLY_TARGET_FOLDER and TARGET_FOLDER_PATH:
+            # 仅处理 TARGET_FOLDER_PATH 下的文件
+            print(f"仅处理目标路径: {TARGET_FOLDER_PATH}")
+            try:
+                status, all_datasets = dataset_api.list_datasets(ws_id)
+                if status == 200:
+                    for ds in all_datasets:
+                        folder_id = ds.get("folder_id")
+                        folder_path = get_folder_path(folder_id)
+                        if TARGET_FOLDER_PATH in folder_path:
+                            other_datasets.append(ds)
+                    print(f"找到 {len(other_datasets)} 个知识库（路径包含 {TARGET_FOLDER_PATH}）")
+            except Exception as e:
+                print(f"获取知识库列表失败: {e}")
+        elif PRIORITY_FOLDER_IDS:
             print(f"优先处理 {len(PRIORITY_FOLDER_IDS)} 个文件夹:")
             
             for folder_id in PRIORITY_FOLDER_IDS:
@@ -785,8 +832,8 @@ def run_polling_mode():
                 except Exception as e:
                     print(f"    获取知识库失败: {e}")
         
-        # 如果需要处理其他文件夹
-        if not ONLY_PRIORITY_FOLDER:
+        # 如果需要处理其他文件夹（非 ONLY_TARGET_FOLDER 模式时）
+        if not ONLY_TARGET_FOLDER and not ONLY_PRIORITY_FOLDER:
             try:
                 status, all_datasets = dataset_api.list_datasets(ws_id)
                 if status == 200:

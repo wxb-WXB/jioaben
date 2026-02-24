@@ -392,8 +392,8 @@ class LingyanDataset:
             log.error(f"获取文件夹树失败: {str(e)}")
             return 500, f"请求失败: {str(e)}"
 
-    def list_documents(self, dataset_id: str, workspace_id: str = None) -> tuple[int, list | str]:
-        """获取文档列表（自动分页加载所有数据）"""
+    def list_documents(self, dataset_id: str, workspace_id: str = None, max_retries: int = 3) -> tuple[int, list | str]:
+        """获取文档列表（自动分页加载所有数据，带重试机制）"""
         url = f"{API_HOST}/api/v1/service/datasets/{dataset_id}/documents"
         documents = []
         current_page = 1
@@ -403,8 +403,27 @@ class LingyanDataset:
             headers["X-Workspace-Id"] = workspace_id
             headers["x-fly-tenantid"] = "00000000-0000-0000-0000-000000000000"
         
+        session = get_session()
+        
         while True:
-            response = requests.get(url, headers=headers, params={"page_size": 1000, "page": current_page})
+            last_error = None
+            for attempt in range(max_retries):
+                try:
+                    response = session.get(
+                        url, headers=headers,
+                        params={"page_size": 1000, "page": current_page},
+                        timeout=DEFAULT_TIMEOUT,
+                    )
+                    break
+                except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, requests.exceptions.ChunkedEncodingError) as e:
+                    last_error = e
+                    if attempt < max_retries - 1:
+                        delay = 3 * (2 ** attempt)
+                        log.warning(f"获取文档列表连接错误(page={current_page})，{delay}秒后重试 ({attempt + 1}/{max_retries}): {str(e)}")
+                        time.sleep(delay)
+                    else:
+                        log.error(f"获取文档列表失败(page={current_page})，已达最大重试次数: {str(e)}")
+                        return 500, f"请求失败（重试{max_retries}次后）: {str(last_error)}"
 
             if response.status_code != 200:
                 return response.status_code, response.json().get("msg")

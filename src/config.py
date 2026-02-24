@@ -28,7 +28,7 @@ for _dir in [LOGS_DIR, DATA_DIR, FAILED_RECORDS_DIR, SUCCESS_RECORDS_DIR]:
 # =============================================================================
 API_HOST = "https://ai.yxgswater.com:18080"
 API_KEY = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzE4MDY5MDF9.ybwpX1HlPAGPrncIEKG_OVVghfZEdXpcZFp1P_rTrJs"
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzI0NDQ5ODJ9.-J8hcZG_j5OQyCUABp9DnN04T7GgACt7KXE7MntziMk"
 
 # =============================================================================
 # 工作空间配置
@@ -167,6 +167,24 @@ LOCAL_SCAN = {
 PRIORITY_FOLDER_IDS = [
     # "10aab4f5-3191-4e12-a11c-2f3c4efb8204",  # 09正式稿设计图纸汇总至20260114--已完成
     # "10aab4f5-3191-4e12-a11c-2f3c4efb8204",
+    # "2b937293-4bce-4228-a795-f381bfc34b6e",
+    # "d24a3f53-d00f-4463-9c15-7e665960fe46",
+    # "b6977a07-3a97-4281-ab99-dc15e66d74be", # 安全管理
+    # "078844da-f6f2-4659-8b95-06850bc9ee53", # 应急评估
+    # "1a82209a-32b8-4090-af3d-22a905a3872d", # 应急处置
+    # "f30c6fbe-1881-4fec-9da5-edfafbc2db0e", # 应急准备
+    # "13cd1f5f-a51d-43db-b7aa-e14fa406f321", #安全事故管理
+    # "5ce66bf4-ca6c-49d3-8ae6-dcf5b997defa", # 事故调查和处理
+    # "2a12fba5-96b4-413a-b44b-26fd8c7f41f4", # 作业安全
+    # "461fd079-d597-48bb-8869-626a819e12a5", # 安全教育管理
+    # "127d1ee9-8086-4bb1-80ef-abffba454599", # 安全文档管理
+    # "e4fc92e3-ec13-4dd0-a468-34ca7f9c16d9", # 法规法律识别
+    # "aedb8b38-69c4-4aa3-bbf9-7d2507f05ef5", # 隐患排查治理
+    # "65f3a554-9206-45ab-a116-c18d739edfae", #安全文化建设
+    # "82d5f01f-42c6-4955-8e6c-ef7d212922ca", # 持续改进
+    # "b6977a07-3a97-4281-ab99-dc15e66d74be",
+
+
     
     
 
@@ -176,6 +194,17 @@ PRIORITY_FOLDER_IDS = [
 
 # 是否只处理优先文件夹（如果为True，只处理PRIORITY_FOLDER_IDS指定的文件夹）
 ONLY_PRIORITY_FOLDER = False
+
+# =============================================================================
+# 目标文件夹路径配置（用于只处理指定目录树下的文件）
+# =============================================================================
+# 目标文件夹路径，如 "08安全管理"。当设置后，只处理该路径及其子路径下的文件
+# 空字符串表示不按路径过滤，处理全部
+TARGET_FOLDER_PATH = "08安全管理"
+# TARGET_FOLDER_PATH = ""
+
+# 为True时，仅处理TARGET_FOLDER_PATH下的文件（忽略PRIORITY_FOLDER_IDS，只处理08安全管理目录树）
+ONLY_TARGET_FOLDER = True
 
 
 
