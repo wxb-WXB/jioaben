@@ -201,7 +201,7 @@ ONLY_PRIORITY_FOLDER = False
 # 目标文件夹路径，如 "08安全管理"。当设置后，只处理该路径及其子路径下的文件
 # 空字符串表示不按路径过滤，处理全部
 # TARGET_FOLDER_PATH = "08安全管理"
-TARGET_FOLDER_PATH = "05质量管理"
+TARGET_FOLDER_PATH = "12工程专项管理"
 
 # TARGET_FOLDER_PATH = ""
 

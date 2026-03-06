@@ -14,6 +14,7 @@ python scripts/local/scan_remote.py
 import sys
 import os
 import csv
+import re
 from datetime import datetime
 
 # 添加项目根目录到路径
@@ -44,6 +45,16 @@ print("=" * 70)
 print(f"开始时间: {start_time.strftime('%Y-%m-%d %H:%M:%S')}")
 print(f"统计工作空间: {WORKSPACE_NAME}")
 print("=" * 70)
+
+def natural_sort_key(name):
+    """自然排序键：提取开头的数字前缀用于排序，支持 01、02、03 等格式"""
+    if not name or name in ("根目录", "未知目录"):
+        return (0, 0, name or "")
+    m = re.match(r'^(\d+)', name.strip())
+    if m:
+        return (1, int(m.group(1)), name)
+    return (2, 0, name)
+
 
 dataset = LingyanDataset(API_KEY)
 
@@ -97,7 +108,7 @@ if isinstance(folder_tree, dict):
         build_folder_mapping(tree)
         print(f"构建了 {len(folder_id_to_first_level)} 个文件夹的映射关系")
         print(f"发现 {len(all_first_level_folders)} 个一级目录:")
-        for idx, name in enumerate(sorted(all_first_level_folders.keys()), 1):
+        for idx, name in enumerate(sorted(all_first_level_folders.keys(), key=natural_sort_key), 1):
             print(f"  {idx:2d}. {name}")
     else:
         print(f"警告: tree 字段为空")
@@ -502,13 +513,12 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     writer.writerow([f"【按一级目录统计（知识库维度）- {start_time.strftime('%Y-%m-%d')}】"])
     writer.writerow([])
     
-    # 按知识库数量排序（根目录优先，然后按知识库数量降序，空目录放最后）
+    # 按目录名称数字前缀排序（根目录优先，空目录放最后，其余按 01/02/03 顺序）
     sorted_dirs = sorted(
-        first_level_stats.items(), 
+        first_level_stats.items(),
         key=lambda x: (
-            x[0] == "根目录" and -1,  # 根目录排第一
-            x[1]["知识库数"] == 0,     # 空目录排最后
-            -x[1]["知识库数"]          # 其他按知识库数量降序
+            x[1]["知识库数"] == 0,  # 空目录排最后
+            natural_sort_key(x[0]),
         )
     )
     
@@ -582,8 +592,8 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     writer.writerow([f"【所有文档明细列表 - {start_time.strftime('%Y-%m-%d')}】"])
     writer.writerow(["序号", "一级目录", "知识库名称", "文档名称", "文件类型", "文件大小", "状态"])
     
-    # 按一级目录和知识库排序
-    sorted_docs = sorted(all_docs, key=lambda x: (x["first_level_folder"] != "根目录", x["first_level_folder"], x["dataset_name"], x["doc_name"]))
+    # 按一级目录和知识库排序（目录按数字前缀自然排序）
+    sorted_docs = sorted(all_docs, key=lambda x: (natural_sort_key(x["first_level_folder"]), x["dataset_name"], x["doc_name"]))
     
     for idx, doc in enumerate(sorted_docs, 1):
         writer.writerow([
@@ -656,13 +666,12 @@ print(f"└{'─'*14}┴{'─'*10}┴{'─'*14}┴{'─'*8}┘")
 # 按一级目录统计
 print("\n【按一级目录统计（知识库维度）】")
 
-# 按知识库数量排序（根目录优先，空目录放最后）
+# 按目录名称数字前缀排序（根目录优先，空目录放最后，其余按 01/02/03 顺序）
 sorted_dirs = sorted(
-    first_level_stats.items(), 
+    first_level_stats.items(),
     key=lambda x: (
-        x[0] == "根目录" and -1,
-        x[1]["知识库数"] == 0,
-        -x[1]["知识库数"]
+        x[1]["知识库数"] == 0,  # 空目录排最后
+        natural_sort_key(x[0]),
     )
 )
 
@@ -699,7 +708,7 @@ print(f"文档总数: {total_docs} 个")
 print(f"文件总大小: {format_size(total_size)}")
 print()
 print("按一级目录分布（文档数）:")
-sorted_dirs_by_docs = sorted(first_level_stats.items(), key=lambda x: (x[0] != "根目录", -x[1]["总文档数"]))
+sorted_dirs_by_docs = sorted(first_level_stats.items(), key=lambda x: natural_sort_key(x[0]))
 for idx, (dir_name, stats) in enumerate(sorted_dirs_by_docs[:10], 1):
     pct = stats["总文档数"] / total_docs * 100 if total_docs > 0 else 0
     print(f"  {idx:2d}. {dir_name}: {stats['总文档数']:>5} 个 ({pct:>5.1f}%) - {format_size(stats['总大小']):>10}")

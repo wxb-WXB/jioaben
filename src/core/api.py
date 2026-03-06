@@ -172,7 +172,7 @@ class LingyanFile:
 
 class LingyanDataset:
     """
-    灵眼AI知识库服务类
+    灵燕AI知识库服务类
     
     提供知识库的完整生命周期管理：
     - 创建、查询、更新知识库

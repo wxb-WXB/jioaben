@@ -535,53 +535,53 @@ UPLOAD_TASKS = [
 
     #    # 环保水保
     #     {
-    #       "local_folder": r'E:\安全应急环保部知识库\工程专项管理\环保水保\环保水保标准规范',
-    #       "folder_id": "a07a1196-9b69-4a46-8ad1-911b4049d14e",
+    #       "local_folder": r'E:\知识库资料\安全应急环保部知识库\工程专项管理\环保水保\环保水保标准规范',
+    #       "folder_id": "9eae5211-d1d0-4cf6-a307-d217ce09d1bd",
     #       "dataset_name": "环保水保标准规范'",
     #    },
     #      {
-    #       "local_folder": r'E:\安全应急环保部知识库\工程专项管理\环保水保\环保水保持续改进',
-    #       "folder_id": "d46bf381-ecd2-46a2-a72e-562487df3055",
+    #       "local_folder": r'E:\知识库资料\安全应急环保部知识库\工程专项管理\环保水保\环保水保持续改进',
+    #       "folder_id": "40ed9b5b-376b-4001-abd6-b031df5441c1",
     #       "dataset_name": "环保水保持续改进'",
     #    },
     #     {
-    #       "local_folder": r'E:\安全应急环保部知识库\工程专项管理\环保水保\环保水保管理制度',
-    #       "folder_id": "d46bf381-ecd2-46a2-a72e-562487df3055",
+    #       "local_folder": r'E:\知识库资料\安全应急环保部知识库\工程专项管理\环保水保\环保水保管理制度',
+    #       "folder_id": "999840b4-bd9d-4a6b-82b9-92cef5d3f4e9",
     #       "dataset_name": "环保水保管理制度'",
     #    },
     #     {
-    #       "local_folder": r'E:\安全应急环保部知识库\工程专项管理\环保水保\环保水保会议及汇报',
-    #       "folder_id": "ed5bf987-097a-4b46-99f5-b087886b56a0",
+    #       "local_folder": r'E:\知识库资料\安全应急环保部知识库\工程专项管理\环保水保\环保水保会议及汇报',
+    #       "folder_id": "2b9df264-5576-4c51-a2bb-8e8e8a770227",
     #       "dataset_name": "环保水保会议及汇报'",
     #    },
 
     #     {
-    #       "local_folder": r'E:\安全应急环保部知识库\工程专项管理\环保水保\环保水保监测资料',
-    #       "folder_id": "808733b9-1523-4ac6-949e-d864cf0084db",
+    #       "local_folder": r'E:\知识库资料\安全应急环保部知识库\工程专项管理\环保水保\环保水保监测资料',
+    #       "folder_id": "7396e6c5-de74-4fb6-9ba0-080a82a3aa45",
     #       "dataset_name": "环保水保监测资料'",
     #    },
 
     #      {
-    #       "local_folder": r'E:\安全应急环保部知识库\工程专项管理\环保水保\环保水保监督检查',
-    #       "folder_id": "a65affad-fcd7-4707-ba29-2c5f08aecc34",
+    #       "local_folder": r'E:\知识库资料\安全应急环保部知识库\工程专项管理\环保水保\环保水保监督检查',
+    #       "folder_id": "06fe8efb-176c-4dbc-a330-b3abbbf94197",
     #       "dataset_name": "环保水保监督检查'",
     #    },
 
     #     {
-    #       "local_folder": r'E:\安全应急环保部知识库\工程专项管理\环保水保\环保水保警示案例',
-    #       "folder_id": "a7e1463d-aae3-4711-bd07-eebfe5edf387",
+    #       "local_folder": r'E:\知识库资料\安全应急环保部知识库\工程专项管理\环保水保\环保水保警示案例',
+    #       "folder_id": "0bcc95de-2e00-4d0b-9228-d207009c4c1e",
     #       "dataset_name": "环保水保警示案例'",
     #    },
 
     #      {
-    #       "local_folder": r'E:\安全应急环保部知识库\工程专项管理\环保水保\环保水保设计管理',
-    #       "folder_id": "4c0853ea-b37c-4778-877c-fc335f3a4074",
+    #       "local_folder": r'E:\知识库资料\安全应急环保部知识库\工程专项管理\环保水保\环保水保设计管理',
+    #       "folder_id": "9ca53f8c-d180-4f01-bb97-7da82bb45c1e",
     #       "dataset_name": "环保水保设计管理'",
     #    },
 
     #     {
-    #       "local_folder": r'E:\安全应急环保部知识库\工程专项管理\环保水保\环保水保政策法规',
-    #       "folder_id": "e9843052-4247-4e28-8b40-0d997539f005",
+    #       "local_folder": r'E:\知识库资料\安全应急环保部知识库\工程专项管理\环保水保\环保水保政策法规',
+    #       "folder_id": "7b7f8b7e-70ea-4152-810d-5e4cbc8737e8",
     #       "dataset_name": "环保水保政策法规'",
     #    },
 
@@ -622,93 +622,106 @@ UPLOAD_TASKS = [
 
 
 
-        {
-           "local_folder": r'E:\04技术管理\02招标合同履约考核',
-            "folder_id": "2b937293-4bce-4228-a795-f381bfc34b6e",
-            "dataset_name": "采购合同",
-        },
+        # {
+        #    "local_folder": r'E:\04技术管理\02招标合同履约考核',
+        #     "folder_id": "2b937293-4bce-4228-a795-f381bfc34b6e",
+        #     "dataset_name": "采购合同",
+        # },
 
-         {
-           "local_folder": r'E:\04技术管理\03宣传展板设计文件技术要求',
-            "folder_id": "2c63dd8c-6e46-4665-86d4-55cfb5bc6d5a",
-            "dataset_name": "机电设计管理",
-        },
-         {
-           "local_folder": r'E:\04技术管理\05专题研究',
-            "folder_id": "e39ffba6-6606-449f-abee-2c58ac07d443",
-            "dataset_name": "技术管理",
-        },
-         {
-           "local_folder": r'E:\04技术管理\06交流学习培训材料',
-            "folder_id": "e39ffba6-6606-449f-abee-2c58ac07d443",
-            "dataset_name": "技术管理",
-        },
-         {
-           "local_folder": r'E:\04技术管理\07培训交流调研座谈',
-            "folder_id": "e39ffba6-6606-449f-abee-2c58ac07d443",
-            "dataset_name": "技术管理",
-        },
-        {
-           "local_folder": r'E:\04技术管理\08质量管理',
-            "folder_id": "e904478a-ad2c-42dc-ad5c-cc21d7f967a7",
-            "dataset_name": "质量监督",
-        },
+        #  {
+        #    "local_folder": r'E:\04技术管理\03宣传展板设计文件技术要求',
+        #     "folder_id": "2c63dd8c-6e46-4665-86d4-55cfb5bc6d5a",
+        #     "dataset_name": "机电设计管理",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\05专题研究',
+        #     "folder_id": "e39ffba6-6606-449f-abee-2c58ac07d443",
+        #     "dataset_name": "技术管理",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\06交流学习培训材料',
+        #     "folder_id": "e39ffba6-6606-449f-abee-2c58ac07d443",
+        #     "dataset_name": "技术管理",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\07培训交流调研座谈',
+        #     "folder_id": "e39ffba6-6606-449f-abee-2c58ac07d443",
+        #     "dataset_name": "技术管理",
+        # },
+        # {
+        #    "local_folder": r'E:\04技术管理\08质量管理',
+        #     "folder_id": "e904478a-ad2c-42dc-ad5c-cc21d7f967a7",
+        #     "dataset_name": "质量监督",
+        # },
 
-         {
-           "local_folder": r'E:\04技术管理\10科研材料',
-            "folder_id": "bd038bbc-45ad-4b2d-85b1-93ac1bdbd3c1",
-            "dataset_name": "科研上报材料",
-        },
-         {
-           "local_folder": r'E:\04技术管理\11标准规范性公文',
-            "folder_id": "e7d33f82-8e97-4472-b0d9-7598ddf1fec8",
-            "dataset_name": "综合文秘",
-        },
-         {
-           "local_folder": r'E:\04技术管理\13公司制度内部考核',
-            "folder_id": "02ccb7be-32c8-4587-b3cf-a523621c3443",
-            "dataset_name": "办公与后勤管理类",
-        },
-         {
-           "local_folder": r'E:\04技术管理\14征地移民工作',
-            "folder_id": "d4181c33-995f-448a-8fa6-c74cedcd22ed",
-            "dataset_name": "征地移民变更管理",
-        },
-         {
-           "local_folder": r'E:\04技术管理\16工程创优',
-            "folder_id": "bd038bbc-45ad-4b2d-85b1-93ac1bdbd3c1",
-            "dataset_name": "科研上报材料",
-        },
-         {
-           "local_folder": r'E:\04技术管理\17安全管理',
-            "folder_id": "152068cb-aa43-40bf-a3c9-558088e6e3a8",
-            "dataset_name": "安全目标",
-        },
-         {
-           "local_folder": r'E:\04技术管理\18进度管理材料',
-            "folder_id": "4100cc74-8e98-4f0c-bc10-470f4545bccb",
-            "dataset_name": "进度计划管理",
-        },
-         {
-           "local_folder": r'E:\04技术管理\19PCCP采购标管理',
-            "folder_id": "4100cc74-8e98-4f0c-bc10-470f4545bccb",
-            "dataset_name": "进度计划管理",
-        },
-         {
-           "local_folder": r'E:\04技术管理\20原材设计指标',
-            "folder_id": "cea13953-ab43-4fb1-ac03-0d91553f7565",
-            "dataset_name": "标准规范",
-        },
-         {
-           "local_folder": r'E:\04技术管理\21造价指标',
-            "folder_id": "ebcd1e83-089b-40e2-8ea7-5993269c3939",
-            "dataset_name": "成本管理类",
-        },
-         {
-           "local_folder": r'E:\04技术管理\22百千万工程',
-            "folder_id": "8801e146-5d29-4a3d-9941-9a333dfca7c9",
-            "dataset_name": "社会责任",
-        },
+        #  {
+        #    "local_folder": r'E:\04技术管理\10科研材料',
+        #     "folder_id": "bd038bbc-45ad-4b2d-85b1-93ac1bdbd3c1",
+        #     "dataset_name": "科研上报材料",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\11标准规范性公文',
+        #     "folder_id": "e7d33f82-8e97-4472-b0d9-7598ddf1fec8",
+        #     "dataset_name": "综合文秘",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\13公司制度内部考核',
+        #     "folder_id": "02ccb7be-32c8-4587-b3cf-a523621c3443",
+        #     "dataset_name": "办公与后勤管理类",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\14征地移民工作',
+        #     "folder_id": "d4181c33-995f-448a-8fa6-c74cedcd22ed",
+        #     "dataset_name": "征地移民变更管理",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\16工程创优',
+        #     "folder_id": "bd038bbc-45ad-4b2d-85b1-93ac1bdbd3c1",
+        #     "dataset_name": "科研上报材料",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\17安全管理',
+        #     "folder_id": "152068cb-aa43-40bf-a3c9-558088e6e3a8",
+        #     "dataset_name": "安全目标",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\18进度管理材料',
+        #     "folder_id": "4100cc74-8e98-4f0c-bc10-470f4545bccb",
+        #     "dataset_name": "进度计划管理",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\19PCCP采购标管理',
+        #     "folder_id": "4100cc74-8e98-4f0c-bc10-470f4545bccb",
+        #     "dataset_name": "进度计划管理",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\20原材设计指标',
+        #     "folder_id": "cea13953-ab43-4fb1-ac03-0d91553f7565",
+        #     "dataset_name": "标准规范",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\21造价指标',
+        #     "folder_id": "ebcd1e83-089b-40e2-8ea7-5993269c3939",
+        #     "dataset_name": "成本管理类",
+        # },
+        #  {
+        #    "local_folder": r'E:\04技术管理\22百千万工程',
+        #     "folder_id": "8801e146-5d29-4a3d-9941-9a333dfca7c9",
+        #     "dataset_name": "社会责任",
+        # },
+
+
+        #    {
+        #     "local_folder": r'E:\知识库资料\2023年9月以前',
+        #     "folder_id": "c6bc684b-dff8-4b9c-8d13-0c36e4fdbbd5",
+        #     "dataset_name": "2023年9月以前",
+        #     },
+
+             {
+            "local_folder": r'E:\知识库资料\2025',
+            "folder_id": "0ef64723-f177-437f-bbe8-bb692f0cce72",
+            "dataset_name": "2025",
+            },
        
 ]
 
