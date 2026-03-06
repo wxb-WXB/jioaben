@@ -36,7 +36,7 @@ SERVERS = [
         "host": "10.11.76.210",
         "port": 22,
         "username": "root",
-        "password": "1s3LwmnznxQ=",
+        "password": "anc48yji3",
     },
 ]
 

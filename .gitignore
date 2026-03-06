@@ -1,3 +1,16 @@
-.vscode/
+# 数据文件，不纳入版本控制
+data/
+
+# 日志文件
 logs/
-**/__pycache__/
+
+# 失败记录
+failed_records/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.env
+venv/
+.venv/

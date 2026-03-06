@@ -384,10 +384,37 @@ for doc in all_docs:
 timestamp = start_time.strftime('%Y-%m-%d_%H%M%S')
 csv_filename = os.path.join(LOGS_DIR, f"vector_stats_{timestamp}.csv")
 
+# 预先排序，CSV 和控制台复用
+sorted_dirs = sorted(
+    first_level_stats.items(),
+    key=lambda x: (x[1]["知识库数"] == 0, natural_sort_key(x[0])),
+)
+dirs_with_datasets_csv = [(n, s) for n, s in sorted_dirs if s["知识库数"] > 0]
+
 # 写入CSV文件
 with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     writer = csv.writer(f)
-    
+
+    # ========== 表0: 目录树进度概览（最上方）==========
+    writer.writerow([f"【目录树进度概览 - {start_time.strftime('%Y年%m月%d日')}】"])
+    writer.writerow(["说明：待处理 = 待处理 + 无任务 + 进行中 + 已取消"])
+    writer.writerow([])
+    writer.writerow(["目录名称", "成功", "待处理", "总文档数", "成功率"])
+
+    _g_ok = _g_pend = _g_tot = 0
+    for _dir_name, _stats in dirs_with_datasets_csv:
+        _ok   = _stats["成功"]
+        _pend = _stats["待处理"] + _stats["无任务"] + _stats["进行中"] + _stats["已取消"]
+        _tot  = _stats["总文档数"]
+        _pct  = f"{_ok / _tot * 100:.1f}%" if _tot > 0 else "0%"
+        writer.writerow([_dir_name, _ok, _pend, _tot, _pct])
+        _g_ok += _ok; _g_pend += _pend; _g_tot += _tot
+
+    _g_pct = f"{_g_ok / _g_tot * 100:.1f}%" if _g_tot > 0 else "0%"
+    writer.writerow(["【全部目录汇总】", _g_ok, _g_pend, _g_tot, _g_pct])
+    writer.writerow([])
+    writer.writerow([])
+
     # ========== 表1: 汇总统计 ==========
     writer.writerow([f"【汇总统计 - {start_time.strftime('%Y年%m月%d日')}】"])
     writer.writerow(["工作空间", WORKSPACE_NAME])
@@ -512,16 +539,7 @@ with open(csv_filename, 'w', encoding='utf-8-sig', newline='') as f:
     # ========== 表7: 按一级目录统计（知识库维度）==========
     writer.writerow([f"【按一级目录统计（知识库维度）- {start_time.strftime('%Y-%m-%d')}】"])
     writer.writerow([])
-    
-    # 按目录名称数字前缀排序（根目录优先，空目录放最后，其余按 01/02/03 顺序）
-    sorted_dirs = sorted(
-        first_level_stats.items(),
-        key=lambda x: (
-            x[1]["知识库数"] == 0,  # 空目录排最后
-            natural_sort_key(x[0]),
-        )
-    )
-    
+
     # 写入汇总统计表
     writer.writerow(["一级目录名称", "知识库数", "文档总数", "总大小", "文本", "PDF", "其他", "成功", "进行中", "待处理", "已取消", "无任务"])
     
@@ -666,22 +684,13 @@ print(f"└{'─'*14}┴{'─'*10}┴{'─'*14}┴{'─'*8}┘")
 # 按一级目录统计
 print("\n【按一级目录统计（知识库维度）】")
 
-# 按目录名称数字前缀排序（根目录优先，空目录放最后，其余按 01/02/03 顺序）
-sorted_dirs = sorted(
-    first_level_stats.items(),
-    key=lambda x: (
-        x[1]["知识库数"] == 0,  # 空目录排最后
-        natural_sort_key(x[0]),
-    )
-)
-
 non_empty_dirs = sum(1 for s in first_level_stats.values() if s["知识库数"] > 0)
 empty_dirs = len(first_level_stats) - non_empty_dirs
 print(f"共有 {len(first_level_stats)} 个一级目录（{non_empty_dirs} 个有知识库，{empty_dirs} 个为空）")
 print()
 
-# 只显示有知识库的目录
-dirs_with_datasets = [(name, stats) for name, stats in sorted_dirs if stats["知识库数"] > 0]
+# 只显示有知识库的目录（复用已排序的 sorted_dirs）
+dirs_with_datasets = dirs_with_datasets_csv
 
 for idx, (dir_name, stats) in enumerate(dirs_with_datasets, 1):
     print(f"{idx:2d}. 【{dir_name}】")
