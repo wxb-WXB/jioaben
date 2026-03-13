@@ -13,7 +13,7 @@ python scripts/local/scan_remote.py
 """
 import sys
 import os
-import csv
+import csv      
 import re
 from datetime import datetime
 

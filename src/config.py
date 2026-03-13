@@ -28,7 +28,7 @@ for _dir in [LOGS_DIR, DATA_DIR, FAILED_RECORDS_DIR, SUCCESS_RECORDS_DIR]:
 # =============================================================================
 API_HOST = "https://ai.yxgswater.com:18080"
 API_KEY = "sk-7gIAz0lh7JdOIvcCUH9nm1UjfchNpAO6iNihHT8i"
-AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzMwNTA2NTh9.2p1Zlz6LZE2vh6o0EXQtFLDzGm26PBze-T9i2YNe4BA"
+AUTH_TOKEN = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJ1c2VyX2lkIjoiMDIzY2EzZDUyY2YwNDY0N2EwM2IyN2JhMWExMmNhMDUiLCJ1c2VybmFtZSI6IjEzNjI0ODM1MTE2IiwiaXNfc3VwZXJ1c2VyIjp0cnVlLCJleHAiOjE3NzM2NTY0MDV9.O5rMqfmYC4cttrtpkGyzqwYieA1oeC8KOYmlUrorgiY"
 
 # =============================================================================
 # 工作空间配置
@@ -201,19 +201,11 @@ ONLY_PRIORITY_FOLDER = False
 # 目标文件夹路径，如 "08安全管理"。当设置后，只处理该路径及其子路径下的文件
 # 空字符串表示不按路径过滤，处理全部
 # TARGET_FOLDER_PATH = "08安全管理"
-TARGET_FOLDER_PATH = "12工程专项管理"
-
+TARGET_FOLDER_PATH = "11机电管理"
 # TARGET_FOLDER_PATH = ""
 
 # 为True时，仅处理TARGET_FOLDER_PATH下的文件（忽略PRIORITY_FOLDER_IDS，只处理08安全管理目录树）
 ONLY_TARGET_FOLDER = True
-
-
-
-
-
-
-
 # =============================================================================
 # 远程服务器配置（用于上传统计报告等文件）
 # =============================================================================

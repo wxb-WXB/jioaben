@@ -1,7 +1,7 @@
 """
 远程重启 MinerU Docker 服务脚本
 - 支持三台解析服务器并发重启
-- 每30分钟自动执行一次
+- 每2个小时自动执行一次
 - 实时监控三台服务器内存（每秒刷新）
 """
 import paramiko
@@ -44,7 +44,7 @@ SERVERS = [
 RESTART_CMD = "cd /data/mineru-api && docker-compose down && docker-compose up -d"
 
 # 重启间隔（秒）
-RESTART_INTERVAL = 30 * 60  # 30 分钟
+RESTART_INTERVAL = 60 * 60
 
 # 内存监控刷新间隔（秒）
 MEM_REFRESH_INTERVAL = 1
